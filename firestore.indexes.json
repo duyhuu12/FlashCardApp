@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "cardProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "deckId", "order": "ASCENDING" },
+        { "fieldPath": "nextReviewAt", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

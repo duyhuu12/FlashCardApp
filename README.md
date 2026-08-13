@@ -1,50 +1,111 @@
-# Welcome to your Expo app 👋
+# LexiLoop – Ứng dụng học từ vựng bằng flashcard
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+LexiLoop là ứng dụng React Native dùng flashcard và lặp lại ngắt quãng. Người dùng có thể quản lý bộ từ, ôn bằng thẻ lật/vuốt, theo dõi tiến độ, chia sẻ bộ từ và đặt lịch nhắc học hằng ngày.
 
-## Get started
+## Công nghệ
 
-1. Install dependencies
+- Expo SDK 54, React Native 0.81, TypeScript
+- Expo Router/React Navigation
+- Firebase Authentication và Cloud Firestore
+- Expo Notifications
+- React Native Animated và Gesture Handler
 
-   ```bash
-   npm install
-   ```
+## Chức năng
 
-2. Start the app
+- Đăng ký, đăng nhập và duy trì phiên bằng Firebase Auth.
+- Tạo, sửa, xóa bộ từ và flashcard; validate form và phát hiện từ trùng.
+- Danh sách thẻ phân trang 40 mục/lần, ưu tiên dữ liệu cache.
+- Phiên ôn chỉ lấy tối đa 30 thẻ đến hạn, sắp theo lịch ôn gần nhất.
+- Lật thẻ, vuốt trái/phải và đánh giá Không nhớ/Khó/Dễ.
+- Thống kê bằng truy vấn đếm phía Firestore, không tải toàn bộ tài liệu.
+- Tích hợp sẵn lộ trình gần 3.000 từ Anh–Việt từ tài liệu Word, chia theo nhóm và chủ đề.
+- Mọi tài khoản đều nhìn thấy 61 bài ngay khi đăng nhập, không cần nhập dữ liệu riêng.
+- Công khai và sao chép bộ từ cộng đồng.
+- Nhắc ôn hằng ngày bằng local notification.
+- Phiên học hằng ngày trộn tối đa 30 thẻ: lỗi sai, từ khó, đến hạn và từ mới.
+- Luyện tập theo chế độ trắc nghiệm, ghép cặp và nhập từ.
+- XP, streak, thành tích và bảng xếp hạng.
+- Loading, Error và Empty State cho các luồng tải dữ liệu.
 
-   ```bash
-   npx expo start
-   ```
+## Kiến trúc dữ liệu
 
-In the output, you'll find options to open the app in a
+```text
+users/{uid}
+  cardProgress/{cardId}
+  reviewLogs/{reviewId}
+  deckStates/{deckId}
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+leaderboard/{uid}
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+decks/{deckId}
+  cards/{cardId}
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Nội dung lộ trình hệ thống nằm trong `src/data/en-vi-word-topics.json`. Firestore chỉ lưu tiến độ riêng trong `cardProgress`, `deckStates` và `studySessions`; bộ cá nhân vẫn được lưu trong `decks/{deckId}/cards`.
 
-## Learn more
+Thẻ chưa học được tính là `new`, không phải `due`. Mỗi lần đánh giá cập nhật `studySessions/{YYYY-MM-DD}` để tính mục tiêu ngày, streak và XP chính xác.
 
-To learn more about developing your project with Expo, look at the following resources:
+## Cài đặt
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Yêu cầu Node.js LTS và Expo Go tương thích SDK 54.
 
-## Join the community
+```bash
+npm install
+```
 
-Join our community of developers creating universal apps.
+1. Tạo project tại Firebase Console.
+2. Bật Authentication → Sign-in method → Email/Password.
+3. Tạo Cloud Firestore database.
+4. Sao chép `.env.example` thành `.env` và điền Firebase Web App config.
+5. Triển khai Firestore Rules và composite index:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npx firebase-tools login
+npx firebase-tools use YOUR_PROJECT_ID
+npx firebase-tools deploy --only firestore
+```
+
+6. Chạy ứng dụng:
+
+```bash
+npx expo start
+```
+
+Sau khi thay `.env`, dừng Metro và khởi động lại. Không commit file `.env`.
+
+## Lộ trình từ vựng theo chủ đề
+
+Tài liệu nguồn có 2.997 dòng từ hợp lệ. Sau khi bỏ 11 bản ghi trùng hoàn toàn trong cùng chủ đề, ứng dụng sử dụng 2.986 thẻ duy nhất, chia thành 10 nhóm lớn và 61 bài học. Lộ trình được đóng gói sẵn trong app nên tài khoản mới có thể học ngay.
+
+Tạo lại dữ liệu JSON từ file Word bằng PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build-word-topic-dataset.ps1 `
+  -SourceDocx "D:\Tai Lieu\TỪ-VỰNG-THEO-CHỦ-ĐỀ-TĂNG-ĐIỂM-NGHE-ĐỌC-NÓI-VIẾT.docx"
+```
+
+Kết quả nằm tại `src/data/en-vi-word-topics.json`; báo cáo làm sạch nằm tại `docs/word-topic-import-audit.json`. Bài đầu được mở mặc định, bài tiếp theo mở khi người học đã đánh giá ít nhất 80% số thẻ của bài trước.
+
+## Thuật toán ôn tập
+
+- Không nhớ: đặt lại chuỗi ghi nhớ, ôn sau 10 phút.
+- Khó: khoảng cách tối thiểu 1 ngày, sau đó nhân 1,5.
+- Dễ: lần đầu 3 ngày, sau đó nhân 2,5.
+- Một thẻ được tính đã thuộc khi trả lời đúng liên tiếp ít nhất 3 lần và khoảng ôn đạt ít nhất 7 ngày.
+
+## Kiểm thử luồng chính
+
+1. Đăng ký và đăng nhập.
+2. Đăng nhập bằng tài khoản mới và xác nhận 61 bài xuất hiện ngay, không cần nhập dữ liệu.
+3. Kiểm tra đủ 10 nhóm, 61 bài, 2.986 thẻ và quy tắc mở khóa 80%.
+4. Ôn tập và xác nhận phiên có tối đa 30 thẻ.
+5. Tạo bộ riêng; thêm, sửa và xóa thẻ.
+6. Kiểm tra thống kê sau khi đánh giá cả ba mức.
+7. Đặt lịch nhắc trên thiết bị Android/iOS thật.
+
+## Lưu ý
+
+- Local notification cần kiểm thử trên Android/iOS; web không hỗ trợ luồng cài đặt này.
+- Ảnh minh họa nhận URL để không bắt buộc Firebase Storage/Blaze.
+- Không xóa deck trực tiếp trong Firebase Console vì subcollection không tự bị xóa. Xóa qua ứng dụng sẽ dọn cards và progress liên quan.
+- Truy vấn phiên ôn cần composite index `cardProgress(deckId ASC, nextReviewAt ASC)` trong `firestore.indexes.json`.

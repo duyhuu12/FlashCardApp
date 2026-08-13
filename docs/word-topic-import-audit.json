@@ -1,0 +1,557 @@
+{
+    "sourceFile":  "D:\\Tai Lieu\\TỪ-VỰNG-THEO-CHỦ-ĐỀ-TĂNG-ĐIỂM-NGHE-ĐỌC-NÓI-VIẾT.docx",
+    "nonEmptyLineCount":  3086,
+    "categoryCount":  10,
+    "topicCount":  61,
+    "parsedEntryCount":  2997,
+    "duplicateEntriesRemoved":  11,
+    "finalWordCount":  2986,
+    "unparsedLineCount":  11,
+    "unparsedLines":  [
+                          {
+                              "topicId":  "topic-16",
+                              "topic":  "FACEBOOK",
+                              "text":  "4. TỪ VỰNG VỀ CÁC HOẠT ĐỘNG TRÊN FACEBOOK:"
+                          },
+                          {
+                              "topicId":  "topic-18",
+                              "topic":  "VŨ KHÍ",
+                              "text":  "TỪ VỰNG TIẾNG ANH CHỦ ĐỀ VŨ KHÍ"
+                          },
+                          {
+                              "topicId":  "topic-37",
+                              "topic":  "NGÀY LỄ TẾT _ ĐÁM CƯỚI",
+                              "text":  "36.1 NGÀY LỄ TẾT"
+                          },
+                          {
+                              "topicId":  "topic-37",
+                              "topic":  "NGÀY LỄ TẾT _ ĐÁM CƯỚI",
+                              "text":  "36.2 ĐÁM CƯỚI:"
+                          },
+                          {
+                              "topicId":  "topic-38",
+                              "topic":  "FOOD AND DRINK",
+                              "text":  "FOODS – MÓN ĂN"
+                          },
+                          {
+                              "topicId":  "topic-38",
+                              "topic":  "FOOD AND DRINK",
+                              "text":  "Cooking Methods – Phương pháp nấu ăn"
+                          },
+                          {
+                              "topicId":  "topic-38",
+                              "topic":  "FOOD AND DRINK",
+                              "text":  "Food Tastes – Hương vị của món ăn"
+                          },
+                          {
+                              "topicId":  "topic-38",
+                              "topic":  "FOOD AND DRINK",
+                              "text":  "TỪ VỰNG TIẾNG ANH VỀ THỨC UỐNG"
+                          },
+                          {
+                              "topicId":  "topic-38",
+                              "topic":  "FOOD AND DRINK",
+                              "text":  "Từ vựng về gia vị:"
+                          },
+                          {
+                              "topicId":  "topic-45",
+                              "topic":  "TRUYỀN HÌNH \u0026 BÁO CHÍ",
+                              "text":  "10. CÁC TỪ CHỈ TRẠNG THÁI, MỨC ĐỘ"
+                          },
+                          {
+                              "topicId":  "topic-45",
+                              "topic":  "TRUYỀN HÌNH \u0026 BÁO CHÍ",
+                              "text":  "TỪ VỰNG TIẾNG ANH CHỦ ĐỀ THÁI ĐỘ,MỨC ĐỘ"
+                          }
+                      ],
+    "topics":  [
+                   {
+                       "id":  "topic-01",
+                       "order":  1,
+                       "categoryOrder":  1,
+                       "title":  "ĐỘNG VẬT",
+                       "sourceNumber":  "1",
+                       "wordCount":  37
+                   },
+                   {
+                       "id":  "topic-02",
+                       "order":  2,
+                       "categoryOrder":  1,
+                       "title":  "CÂY CỐI VÀ HOA",
+                       "sourceNumber":  "2",
+                       "wordCount":  78
+                   },
+                   {
+                       "id":  "topic-03",
+                       "order":  3,
+                       "categoryOrder":  1,
+                       "title":  "TRÁI CÂY",
+                       "sourceNumber":  "3",
+                       "wordCount":  46
+                   },
+                   {
+                       "id":  "topic-04",
+                       "order":  4,
+                       "categoryOrder":  1,
+                       "title":  "RAU CỦ",
+                       "sourceNumber":  "4",
+                       "wordCount":  115
+                   },
+                   {
+                       "id":  "topic-05",
+                       "order":  5,
+                       "categoryOrder":  1,
+                       "title":  "PHONG CẢNH",
+                       "sourceNumber":  "5",
+                       "wordCount":  43
+                   },
+                   {
+                       "id":  "topic-06",
+                       "order":  6,
+                       "categoryOrder":  1,
+                       "title":  "THỜI TIẾT",
+                       "sourceNumber":  "6",
+                       "wordCount":  5
+                   },
+                   {
+                       "id":  "topic-07",
+                       "order":  7,
+                       "categoryOrder":  1,
+                       "title":  "MÔI TRƯỜNG",
+                       "sourceNumber":  "7",
+                       "wordCount":  143
+                   },
+                   {
+                       "id":  "topic-08",
+                       "order":  8,
+                       "categoryOrder":  1,
+                       "title":  "MÀU SẮC",
+                       "sourceNumber":  "8",
+                       "wordCount":  27
+                   },
+                   {
+                       "id":  "topic-09",
+                       "order":  9,
+                       "categoryOrder":  2,
+                       "title":  "NGOẠI HÌNH",
+                       "sourceNumber":  "9",
+                       "wordCount":  104
+                   },
+                   {
+                       "id":  "topic-10",
+                       "order":  10,
+                       "categoryOrder":  2,
+                       "title":  "CƠ THỂ",
+                       "sourceNumber":  "10",
+                       "wordCount":  60
+                   },
+                   {
+                       "id":  "topic-11",
+                       "order":  11,
+                       "categoryOrder":  2,
+                       "title":  "HÀNH ĐỘNG",
+                       "sourceNumber":  "11",
+                       "wordCount":  80
+                   },
+                   {
+                       "id":  "topic-12",
+                       "order":  12,
+                       "categoryOrder":  2,
+                       "title":  "TÍNH CÁCH",
+                       "sourceNumber":  "12",
+                       "wordCount":  105
+                   },
+                   {
+                       "id":  "topic-13",
+                       "order":  13,
+                       "categoryOrder":  2,
+                       "title":  "CẢM XÚC \u0026 CẢM GIÁC",
+                       "sourceNumber":  "13",
+                       "wordCount":  60
+                   },
+                   {
+                       "id":  "topic-14",
+                       "order":  14,
+                       "categoryOrder":  3,
+                       "title":  "GIA ĐÌNH",
+                       "sourceNumber":  "14",
+                       "wordCount":  43
+                   },
+                   {
+                       "id":  "topic-15",
+                       "order":  15,
+                       "categoryOrder":  3,
+                       "title":  "CÁC MỐI QUAN HỆ",
+                       "sourceNumber":  "15",
+                       "wordCount":  28
+                   },
+                   {
+                       "id":  "topic-16",
+                       "order":  16,
+                       "categoryOrder":  3,
+                       "title":  "FACEBOOK",
+                       "sourceNumber":  "16.",
+                       "wordCount":  54
+                   },
+                   {
+                       "id":  "topic-17",
+                       "order":  17,
+                       "categoryOrder":  4,
+                       "title":  "TRANG PHỤC",
+                       "sourceNumber":  "17",
+                       "wordCount":  62
+                   },
+                   {
+                       "id":  "topic-18",
+                       "order":  18,
+                       "categoryOrder":  4,
+                       "title":  "VŨ KHÍ",
+                       "sourceNumber":  "18",
+                       "wordCount":  47
+                   },
+                   {
+                       "id":  "topic-19",
+                       "order":  19,
+                       "categoryOrder":  4,
+                       "title":  "ĐỒ ĂN \u0026 THỨC UỐNG",
+                       "sourceNumber":  "19",
+                       "wordCount":  38
+                   },
+                   {
+                       "id":  "topic-20",
+                       "order":  20,
+                       "categoryOrder":  4,
+                       "title":  "NHÀ CỬA",
+                       "sourceNumber":  "20",
+                       "wordCount":  95
+                   },
+                   {
+                       "id":  "topic-21",
+                       "order":  21,
+                       "categoryOrder":  4,
+                       "title":  "NỘI THẤT",
+                       "sourceNumber":  "21",
+                       "wordCount":  53
+                   },
+                   {
+                       "id":  "topic-22",
+                       "order":  22,
+                       "categoryOrder":  4,
+                       "title":  "THỂ THAO",
+                       "sourceNumber":  "22",
+                       "wordCount":  94
+                   },
+                   {
+                       "id":  "topic-23",
+                       "order":  23,
+                       "categoryOrder":  4,
+                       "title":  "GIAO THÔNG",
+                       "sourceNumber":  "19",
+                       "wordCount":  26
+                   },
+                   {
+                       "id":  "topic-24",
+                       "order":  24,
+                       "categoryOrder":  4,
+                       "title":  "NHÀ BẾP",
+                       "sourceNumber":  "23",
+                       "wordCount":  24
+                   },
+                   {
+                       "id":  "topic-25",
+                       "order":  25,
+                       "categoryOrder":  4,
+                       "title":  "PHÒNG KHÁCH",
+                       "sourceNumber":  "24",
+                       "wordCount":  17
+                   },
+                   {
+                       "id":  "topic-26",
+                       "order":  26,
+                       "categoryOrder":  4,
+                       "title":  "PHÒNG NGỦ",
+                       "sourceNumber":  "25",
+                       "wordCount":  12
+                   },
+                   {
+                       "id":  "topic-27",
+                       "order":  27,
+                       "categoryOrder":  4,
+                       "title":  "PHÒNG TẮM",
+                       "sourceNumber":  "26",
+                       "wordCount":  23
+                   },
+                   {
+                       "id":  "topic-28",
+                       "order":  28,
+                       "categoryOrder":  4,
+                       "title":  "THÀNH PHỐ",
+                       "sourceNumber":  "27",
+                       "wordCount":  25
+                   },
+                   {
+                       "id":  "topic-29",
+                       "order":  29,
+                       "categoryOrder":  5,
+                       "title":  "GIÁO DỤC",
+                       "sourceNumber":  "28",
+                       "wordCount":  45
+                   },
+                   {
+                       "id":  "topic-30",
+                       "order":  30,
+                       "categoryOrder":  5,
+                       "title":  "Sức khỏe",
+                       "sourceNumber":  "29",
+                       "wordCount":  35
+                   },
+                   {
+                       "id":  "topic-31",
+                       "order":  31,
+                       "categoryOrder":  5,
+                       "title":  "SỞ THÍCH",
+                       "sourceNumber":  "30",
+                       "wordCount":  36
+                   },
+                   {
+                       "id":  "topic-32",
+                       "order":  32,
+                       "categoryOrder":  5,
+                       "title":  "MUA SẮM",
+                       "sourceNumber":  "31",
+                       "wordCount":  55
+                   },
+                   {
+                       "id":  "topic-33",
+                       "order":  33,
+                       "categoryOrder":  5,
+                       "title":  "DU LỊCH",
+                       "sourceNumber":  "32",
+                       "wordCount":  32
+                   },
+                   {
+                       "id":  "topic-34",
+                       "order":  34,
+                       "categoryOrder":  5,
+                       "title":  "PHƯƠNG TIỆN GIAO THÔNG",
+                       "sourceNumber":  "33",
+                       "wordCount":  39
+                   },
+                   {
+                       "id":  "topic-35",
+                       "order":  35,
+                       "categoryOrder":  5,
+                       "title":  "NGÀY \u0026 GIỜ",
+                       "sourceNumber":  "34",
+                       "wordCount":  43
+                   },
+                   {
+                       "id":  "topic-36",
+                       "order":  36,
+                       "categoryOrder":  5,
+                       "title":  "NGÔN NGỮ",
+                       "sourceNumber":  "35",
+                       "wordCount":  31
+                   },
+                   {
+                       "id":  "topic-37",
+                       "order":  37,
+                       "categoryOrder":  5,
+                       "title":  "NGÀY LỄ TẾT _ ĐÁM CƯỚI",
+                       "sourceNumber":  "36",
+                       "wordCount":  44
+                   },
+                   {
+                       "id":  "topic-38",
+                       "order":  38,
+                       "categoryOrder":  5,
+                       "title":  "FOOD AND DRINK",
+                       "sourceNumber":  "37",
+                       "wordCount":  65
+                   },
+                   {
+                       "id":  "topic-39",
+                       "order":  39,
+                       "categoryOrder":  6,
+                       "title":  "CÔNG TY",
+                       "sourceNumber":  "38",
+                       "wordCount":  36
+                   },
+                   {
+                       "id":  "topic-40",
+                       "order":  40,
+                       "categoryOrder":  6,
+                       "title":  "CÔNG VIỆC",
+                       "sourceNumber":  "39",
+                       "wordCount":  36
+                   },
+                   {
+                       "id":  "topic-41",
+                       "order":  41,
+                       "categoryOrder":  6,
+                       "title":  "ĐỜI SỐNG CÔNG SỞ",
+                       "sourceNumber":  "40",
+                       "wordCount":  24
+                   },
+                   {
+                       "id":  "topic-42",
+                       "order":  42,
+                       "categoryOrder":  7,
+                       "title":  "NGHỆ THUẬT",
+                       "sourceNumber":  "41",
+                       "wordCount":  53
+                   },
+                   {
+                       "id":  "topic-43",
+                       "order":  43,
+                       "categoryOrder":  8,
+                       "title":  "MÁY TÍNH \u0026 MẠNG INTERNET",
+                       "sourceNumber":  "42",
+                       "wordCount":  49
+                   },
+                   {
+                       "id":  "topic-44",
+                       "order":  44,
+                       "categoryOrder":  8,
+                       "title":  "ĐIỆN THOẠI \u0026 THƯ TÍN",
+                       "sourceNumber":  "43",
+                       "wordCount":  62
+                   },
+                   {
+                       "id":  "topic-45",
+                       "order":  45,
+                       "categoryOrder":  8,
+                       "title":  "TRUYỀN HÌNH \u0026 BÁO CHÍ",
+                       "sourceNumber":  "44",
+                       "wordCount":  26
+                   },
+                   {
+                       "id":  "topic-46",
+                       "order":  46,
+                       "categoryOrder":  8,
+                       "title":  "ĐO LƯỜNG",
+                       "sourceNumber":  "45",
+                       "wordCount":  18
+                   },
+                   {
+                       "id":  "topic-47",
+                       "order":  47,
+                       "categoryOrder":  8,
+                       "title":  "TỐC ĐỘ",
+                       "sourceNumber":  "46",
+                       "wordCount":  16
+                   },
+                   {
+                       "id":  "topic-48",
+                       "order":  48,
+                       "categoryOrder":  8,
+                       "title":  "TẦN SUẤT",
+                       "sourceNumber":  "47",
+                       "wordCount":  9
+                   },
+                   {
+                       "id":  "topic-49",
+                       "order":  49,
+                       "categoryOrder":  8,
+                       "title":  "Mức độ",
+                       "sourceNumber":  "48",
+                       "wordCount":  22
+                   },
+                   {
+                       "id":  "topic-50",
+                       "order":  50,
+                       "categoryOrder":  8,
+                       "title":  "VỊ TRÍ",
+                       "sourceNumber":  "44",
+                       "wordCount":  21
+                   },
+                   {
+                       "id":  "topic-51",
+                       "order":  51,
+                       "categoryOrder":  8,
+                       "title":  "CÁC TỪ CHỈ SỰ TĂNG – GIẢM",
+                       "sourceNumber":  "49",
+                       "wordCount":  10
+                   },
+                   {
+                       "id":  "topic-52",
+                       "order":  52,
+                       "categoryOrder":  9,
+                       "title":  "TRANG ĐIỂM MẶT VÀ DỤNG CỤ",
+                       "sourceNumber":  "50.1",
+                       "wordCount":  18
+                   },
+                   {
+                       "id":  "topic-53",
+                       "order":  53,
+                       "categoryOrder":  9,
+                       "title":  "TRANG SỨC",
+                       "sourceNumber":  "50.2",
+                       "wordCount":  16
+                   },
+                   {
+                       "id":  "topic-54",
+                       "order":  54,
+                       "categoryOrder":  10,
+                       "title":  "DANH TỪ SỬ DỤNG NHIỀU NHẤT TRONG TIẾNG ANH",
+                       "sourceNumber":  "51",
+                       "wordCount":  100
+                   },
+                   {
+                       "id":  "topic-55",
+                       "order":  55,
+                       "categoryOrder":  10,
+                       "title":  "TÍNH TỪ SỬ DỤNG NHIỀU NHẤT TRONG TIẾNG ANH",
+                       "sourceNumber":  "52",
+                       "wordCount":  80
+                   },
+                   {
+                       "id":  "topic-56",
+                       "order":  56,
+                       "categoryOrder":  10,
+                       "title":  "ĐỘNG TỪ SỬ DỤNG NHIỀU NHẤT TRONG TIẾNG ANH",
+                       "sourceNumber":  "53",
+                       "wordCount":  121
+                   },
+                   {
+                       "id":  "topic-57",
+                       "order":  57,
+                       "categoryOrder":  10,
+                       "title":  "TRẠNG TỪ SỬ DỤNG NHIỀU NHẤT TRONG TIẾNG ANH",
+                       "sourceNumber":  "54",
+                       "wordCount":  87
+                   },
+                   {
+                       "id":  "topic-58",
+                       "order":  58,
+                       "categoryOrder":  10,
+                       "title":  "NHỮNG TỪ CƠ BẢN HAY NHẦM LẪN TRONG TIẾNG ANH",
+                       "sourceNumber":  "55",
+                       "wordCount":  21
+                   },
+                   {
+                       "id":  "topic-59",
+                       "order":  59,
+                       "categoryOrder":  10,
+                       "title":  "DỤNG CỤ HỌC TẬP",
+                       "sourceNumber":  "56",
+                       "wordCount":  65
+                   },
+                   {
+                       "id":  "topic-60",
+                       "order":  60,
+                       "categoryOrder":  10,
+                       "title":  "CON SỐ",
+                       "sourceNumber":  "57",
+                       "wordCount":  46
+                   },
+                   {
+                       "id":  "topic-61",
+                       "order":  61,
+                       "categoryOrder":  10,
+                       "title":  "ÂM NHẠC",
+                       "sourceNumber":  "57",
+                       "wordCount":  81
+                   }
+               ]
+}

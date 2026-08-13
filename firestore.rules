@@ -1,0 +1,69 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsDeck(deckId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/decks/$(deckId)).data.ownerId == request.auth.uid;
+    }
+
+    function validDeck() {
+      return request.resource.data.title is string
+        && request.resource.data.title.size() >= 2
+        && request.resource.data.title.size() <= 60
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 300
+        && request.resource.data.ownerId is string
+        && request.resource.data.isPublic is bool
+        && request.resource.data.cardCount is int
+        && request.resource.data.cardCount >= 0;
+    }
+
+    match /users/{userId} {
+      allow create: if signedIn() && request.auth.uid == userId;
+      allow read, update, delete: if signedIn() && request.auth.uid == userId;
+
+      match /{privateCollection}/{documentId} {
+        allow read, write: if signedIn() && request.auth.uid == userId
+          && privateCollection in ['cardProgress', 'reviewLogs', 'studySessions', 'deckStates', 'importStates'];
+      }
+    }
+
+    match /decks/{deckId} {
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && validDeck();
+      allow read: if signedIn()
+        && (resource.data.ownerId == request.auth.uid || resource.data.isPublic == true);
+      allow update: if signedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId
+        && validDeck();
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+
+      match /cards/{cardId} {
+        allow read: if signedIn()
+          && (ownsDeck(deckId)
+            || get(/databases/$(database)/documents/decks/$(deckId)).data.isPublic == true);
+        allow create, update: if ownsDeck(deckId)
+          && request.resource.data.term is string
+          && request.resource.data.term.size() > 0
+          && request.resource.data.term.size() <= 100
+          && request.resource.data.meaning is string
+          && request.resource.data.meaning.size() > 0
+          && request.resource.data.meaning.size() <= 300;
+        allow delete: if ownsDeck(deckId);
+      }
+    }
+
+    match /leaderboard/{userId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.auth.uid == userId;
+      allow delete: if false;
+    }
+  }
+}
