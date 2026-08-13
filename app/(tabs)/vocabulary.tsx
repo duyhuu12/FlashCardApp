@@ -9,13 +9,13 @@ import {
   listBuiltInVocabulary,
   searchBuiltInVocabulary,
 } from '@/src/services/builtInVocabularyService';
-import { listOwnedDecks, listOwnedDecksFromCache, listProgress } from '@/src/services/deckService';
+import { listOwnedDecks, listOwnedDecksFromCache, listProgress, listProgressFromCache } from '@/src/services/deckService';
 import { speakEnglish, stopSpeaking } from '@/src/services/speechService';
-import { colors, shadows } from '@/src/theme/colors';
+import { colors, resolveDeckColor, shadows } from '@/src/theme/colors';
 import type { CardProgress, Deck } from '@/src/types/models';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 const SEARCH_RESULT_LIMIT = 50;
@@ -34,6 +34,7 @@ export default function VocabularyScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
   const [learningFilter, setLearningFilter] = useState<LearningFilter>('all');
   const [progressItems, setProgressItems] = useState<CardProgress[]>([]);
   const [progressLoading, setProgressLoading] = useState(true);
@@ -41,6 +42,7 @@ export default function VocabularyScreen() {
   const [personalDecks, setPersonalDecks] = useState<Deck[]>([]);
   const [personalLoading, setPersonalLoading] = useState(true);
   const [personalError, setPersonalError] = useState('');
+  const progressLoadedRef = useRef(false);
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<Set<string>>(
     () => new Set(['category-01']),
   );
@@ -48,7 +50,8 @@ export default function VocabularyScreen() {
   const categories = useMemo(() => (user ? listBuiltInCategories(user.uid) : []), [user]);
   const allVocabulary = useMemo(() => (user ? listBuiltInVocabulary(user.uid) : []), [user]);
   const previewWords = allVocabulary.slice(0, 6);
-  const normalizedQuery = query.trim();
+  const normalizedQuery = deferredQuery.trim();
+  const searchPending = query !== deferredQuery;
   const progressByCardId = useMemo(
     () => new Map(progressItems.map((progress) => [progress.cardId, progress])),
     [progressItems],
@@ -91,10 +94,19 @@ export default function VocabularyScreen() {
       setProgressLoading(false);
       return () => { active = false; };
     }
-    setProgressLoading(true);
+    if (!progressLoadedRef.current) setProgressLoading(true);
     setProgressError('');
+    listProgressFromCache(user.uid).then((items) => {
+      if (!active || items.length === 0) return;
+      setProgressItems(items);
+      setProgressLoading(false);
+    });
     listProgress(user.uid)
-      .then((items) => { if (active) setProgressItems(items); })
+      .then((items) => {
+        if (!active) return;
+        progressLoadedRef.current = true;
+        setProgressItems(items);
+      })
       .catch(() => { if (active) setProgressError('Không thể tải trạng thái học. Hãy kiểm tra kết nối và thử lại.'); })
       .finally(() => { if (active) setProgressLoading(false); });
     return () => { active = false; };
@@ -180,6 +192,7 @@ export default function VocabularyScreen() {
             <Ionicons name="close-circle" size={22} color={colors.muted} />
           </Pressable>
         ) : null}
+        {searchPending ? <ActivityIndicator size="small" color={colors.primary} /> : null}
       </View>
 
       <View style={styles.filterSection}>
@@ -455,7 +468,7 @@ export default function VocabularyScreen() {
                     key={deck.id}
                     onPress={() => router.push({ pathname: '/deck/[id]', params: { id: deck.id } })}
                     style={({ pressed }) => [styles.personalDeckCard, pressed && styles.resultRowPressed]}>
-                    <View style={[styles.personalDeckIcon, { backgroundColor: deck.color || colors.primary }]}>
+                    <View style={[styles.personalDeckIcon, { backgroundColor: resolveDeckColor(deck.color) }]}>
                       <Ionicons name="layers" size={23} color="#fff" />
                     </View>
                     <View style={styles.personalDeckCopy}>
@@ -498,7 +511,7 @@ const styles = StyleSheet.create({
   heroBadge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.16)' },
   heroBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   heroTitle: { color: '#fff', fontSize: 24, fontWeight: '900' },
-  heroDescription: { color: '#E2DFFF', lineHeight: 21 },
+  heroDescription: { color: '#D8F7F8', lineHeight: 21 },
   infoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
   infoItem: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.13)' },
   infoText: { color: '#fff', fontSize: 12, fontWeight: '700' },
@@ -518,7 +531,7 @@ const styles = StyleSheet.create({
   categoryCopy: { flex: 1 },
   categoryTitle: { color: colors.text, fontSize: 15, fontWeight: '900' },
   categoryMeta: { color: colors.muted, fontSize: 12, marginTop: 4 },
-  topicList: { paddingHorizontal: 14, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: '#FCFCFF' },
+  topicList: { paddingHorizontal: 14, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: '#F8FCFD' },
   topicRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 11, borderBottomWidth: 1, borderBottomColor: colors.border },
   topicRowLast: { borderBottomWidth: 0 },
   topicNumber: { width: 32, height: 32, borderRadius: 11, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },

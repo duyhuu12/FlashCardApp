@@ -1,23 +1,28 @@
 export const colors = {
-  primary: '#6558D3',
-  primaryDark: '#4B3FB5',
-  primarySoft: '#EEECFF',
-  background: '#F7F7FC',
-  surface: '#FFFFFF',
-  text: '#24233A',
-  muted: '#74738A',
-  border: '#E5E4EF',
-  success: '#29976F',
-  successSoft: '#E4F6EF',
-  warning: '#E28A2B',
-  warningSoft: '#FFF1DD',
-  danger: '#D94A5A',
-  dangerSoft: '#FFE8EB',
+  primary: "#087A9B",
+  primaryDark: "#07526F",
+  primarySoft: "#E2F8FA",
+  background: "#F4FAFC",
+  surface: "#FFFFFF",
+  text: "#102C3D",
+  muted: "#627985",
+  border: "#D6E8EC",
+  success: "#1e912fff",
+  successSoft: "#E4F6EF",
+  warning: "#E28A2B",
+  warningSoft: "#FFF1DD",
+  danger: "#D94A5A",
+  dangerSoft: "#FFE8EB",
 };
+
+export function resolveDeckColor(color?: string | null) {
+  if (!color || color.toUpperCase() === "#6558D3") return colors.primary;
+  return color;
+}
 
 export const shadows = {
   card: {
-    shadowColor: '#201A4D',
+    shadowColor: "#063449",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
     shadowRadius: 14,

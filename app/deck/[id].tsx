@@ -12,7 +12,7 @@ import {
   type CardPageCursor,
 } from '@/src/services/deckService';
 import { speakEnglish, stopSpeaking } from '@/src/services/speechService';
-import { colors, shadows } from '@/src/theme/colors';
+import { colors, resolveDeckColor, shadows } from '@/src/theme/colors';
 import type { Deck, Flashcard } from '@/src/types/models';
 import { friendlyError } from '@/src/utils/errors';
 import { Ionicons } from '@expo/vector-icons';
@@ -125,7 +125,7 @@ export default function DeckDetailScreen() {
   const editable = owner && !deck.pathId;
   return (
     <AppScreen>
-      <View style={[styles.banner, { backgroundColor: deck.color || colors.primary }]}>
+      <View style={[styles.banner, { backgroundColor: resolveDeckColor(deck.color) }]}>
         <View style={styles.bannerTop}>
           <Ionicons name="layers" size={34} color="#fff" />
           <View style={styles.actions}>
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
   bannerTop: { flexDirection: 'row', justifyContent: 'space-between' },
   actions: { flexDirection: 'row', gap: 18 },
   bannerTitle: { color: '#fff', fontSize: 25, fontWeight: '900' },
-  bannerDescription: { color: '#F0EFFF', lineHeight: 20 },
+  bannerDescription: { color: '#DDF9FA', lineHeight: 20 },
   bannerMeta: { color: '#fff', fontWeight: '700', marginTop: 4 },
   buttons: { flexDirection: 'row', gap: 10 },
   sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

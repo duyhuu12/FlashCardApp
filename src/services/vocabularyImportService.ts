@@ -28,7 +28,7 @@ export async function importVocabularyDeck(
       topic: 'Từ vựng thông dụng',
       sourceLanguage: 'Tiếng Anh',
       targetLanguage: 'Tiếng Việt',
-      color: '#6558D3',
+      color: '#087A9B',
       isPublic: false,
       cardCount: 0,
       copiedFromDeckId: null,

@@ -1,6 +1,10 @@
 param(
   [Parameter(Mandatory = $true)][string]$InputPath,
-  [Parameter(Mandatory = $true)][string]$OutputPath
+  [Parameter(Mandatory = $true)][string]$OutputPath,
+  [ValidateSet('Green', 'Magenta', 'None')][string]$KeyColor = 'Green',
+  [int]$TargetSize = 128,
+  [int]$Padding = 8,
+  [switch]$NoTrim
 )
 
 Add-Type -AssemblyName System.Drawing
@@ -20,24 +24,34 @@ $maxY = -1
 for ($y = 0; $y -lt $source.Height; $y++) {
   for ($x = 0; $x -lt $source.Width; $x++) {
     $pixel = $source.GetPixel($x, $y)
-    $greenScore = $pixel.G - [Math]::Max($pixel.R, $pixel.B)
-    if ($greenScore -ge 100) {
-      $alpha = 0
-    } elseif ($greenScore -le 25) {
-      $alpha = 255
-    } else {
-      $alpha = [int](255 * (100 - $greenScore) / 75)
+    $keyScore = switch ($KeyColor) {
+      'Green' { $pixel.G - [Math]::Max($pixel.R, $pixel.B) }
+      'Magenta' { [Math]::Min($pixel.R, $pixel.B) - $pixel.G }
+      default { -1 }
     }
 
-    $despilledGreen = if ($alpha -lt 255) {
-      [Math]::Min($pixel.G, [Math]::Max($pixel.R, $pixel.B))
+    if ($KeyColor -eq 'None' -or $keyScore -le 25) {
+      $keyAlpha = 255
+    } elseif ($keyScore -ge 100) {
+      $keyAlpha = 0
     } else {
-      $pixel.G
+      $keyAlpha = [int](255 * (100 - $keyScore) / 75)
+    }
+    $alpha = [int]($pixel.A * $keyAlpha / 255)
+
+    $red = $pixel.R
+    $green = $pixel.G
+    $blue = $pixel.B
+    if ($keyAlpha -lt 255 -and $KeyColor -eq 'Green') {
+      $green = [Math]::Min($pixel.G, [Math]::Max($pixel.R, $pixel.B))
+    } elseif ($keyAlpha -lt 255 -and $KeyColor -eq 'Magenta') {
+      $red = [Math]::Min($pixel.R, $pixel.G)
+      $blue = [Math]::Min($pixel.B, $pixel.G)
     }
     $transparent.SetPixel(
       $x,
       $y,
-      [System.Drawing.Color]::FromArgb($alpha, $pixel.R, $despilledGreen, $pixel.B)
+      [System.Drawing.Color]::FromArgb($alpha, $red, $green, $blue)
     )
 
     if ($alpha -gt 8) {
@@ -49,24 +63,29 @@ for ($y = 0; $y -lt $source.Height; $y++) {
   }
 }
 
+if ($NoTrim) {
+  $minX = 0
+  $minY = 0
+  $maxX = $source.Width - 1
+  $maxY = $source.Height - 1
+}
+
 if ($maxX -lt $minX -or $maxY -lt $minY) {
   throw "No visible icon pixels found in $InputPath"
 }
 
 $cropWidth = $maxX - $minX + 1
 $cropHeight = $maxY - $minY + 1
-$targetSize = 128
-$padding = 8
-$available = $targetSize - (2 * $padding)
+$available = $TargetSize - (2 * $Padding)
 $scale = [Math]::Min($available / $cropWidth, $available / $cropHeight)
 $drawWidth = [int]($cropWidth * $scale)
 $drawHeight = [int]($cropHeight * $scale)
-$drawX = [int](($targetSize - $drawWidth) / 2)
-$drawY = [int](($targetSize - $drawHeight) / 2)
+$drawX = [int](($TargetSize - $drawWidth) / 2)
+$drawY = [int](($TargetSize - $drawHeight) / 2)
 
 $output = [System.Drawing.Bitmap]::new(
-  $targetSize,
-  $targetSize,
+  $TargetSize,
+  $TargetSize,
   [System.Drawing.Imaging.PixelFormat]::Format32bppArgb
 )
 $graphics = [System.Drawing.Graphics]::FromImage($output)

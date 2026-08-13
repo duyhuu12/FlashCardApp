@@ -54,9 +54,9 @@ const styles = StyleSheet.create({
   },
   iconShellFocused: {
     borderWidth: 2,
-    borderColor: '#8C83E8',
+    borderColor: colors.primary,
     backgroundColor: colors.primarySoft,
-    shadowColor: colors.primary,
+    shadowColor: colors.primaryDark,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.35,
     shadowRadius: 7,

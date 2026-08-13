@@ -4,8 +4,8 @@ import { AppScreen } from "@/src/components/AppScreen";
 import { useAuth } from "@/src/context/AuthContext";
 import { requireFirebase } from "@/src/services/firebase";
 import {
-    cancelReminder,
-    scheduleDailyReminder,
+  cancelReminder,
+  scheduleDailyReminder,
 } from "@/src/services/notificationService";
 import { colors, shadows } from "@/src/theme/colors";
 import { friendlyError } from "@/src/utils/errors";
@@ -13,14 +13,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
-    Alert,
-    Linking,
-    Platform,
-    Pressable,
-    StyleSheet,
-    Switch,
-    Text,
-    View,
+  Alert,
+  Linking,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
 } from "react-native";
 
 export default function SettingsScreen() {
@@ -153,7 +153,7 @@ export default function SettingsScreen() {
       </View>
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Thông tin ứng dụng</Text>
-        <Text style={styles.help}>LexiLoop · Phiên bản 1.0.0</Text>
+        <Text style={styles.help}>PenguinLingo - Phiên bản 1.0.0</Text>
         <Text style={styles.help}>Học từ vựng bằng lặp lại ngắt quãng.</Text>
         <Text style={styles.credit}>
           Dữ liệu bộ 3.000 từ được chọn lọc từ thichhoc-dict, giấy phép CC BY-SA

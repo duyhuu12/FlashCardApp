@@ -36,6 +36,36 @@ export interface CardPage {
 const CARD_PAGE_SIZE = 40;
 const REVIEW_SESSION_SIZE = 30;
 const WRITE_CHUNK_SIZE = 200;
+const PROGRESS_MEMORY_TTL = 2 * 60 * 1000;
+
+interface ProgressMemoryEntry {
+  items: CardProgress[];
+  indexByCardId: Map<string, number>;
+  fetchedAt: number;
+}
+
+const progressMemoryCache = new Map<string, ProgressMemoryEntry>();
+
+function cacheProgress(uid: string, items: CardProgress[], fetchedAt = Date.now()) {
+  progressMemoryCache.set(uid, {
+    items,
+    indexByCardId: new Map(items.map((item, index) => [item.cardId, index])),
+    fetchedAt,
+  });
+}
+
+function updateCachedProgress(uid: string, progress: CardProgress) {
+  const cached = progressMemoryCache.get(uid);
+  if (!cached) return;
+  const index = cached.indexByCardId.get(progress.cardId);
+  if (index === undefined) {
+    cached.indexByCardId.set(progress.cardId, cached.items.length);
+    cached.items.push(progress);
+  } else {
+    cached.items[index] = progress;
+  }
+  cached.fetchedAt = Date.now();
+}
 
 function withId<T>(snapshot: { id: string; data(): unknown }) {
   return { id: snapshot.id, ...(snapshot.data() as object) } as T;
@@ -263,10 +293,16 @@ export async function removeCard(uid: string, deckId: string, cardId: string) {
 }
 
 export async function listProgress(uid: string, deckId?: string) {
+  const memory = progressMemoryCache.get(uid);
+  if (!deckId && memory && Date.now() - memory.fetchedAt < PROGRESS_MEMORY_TTL) {
+    return memory.items;
+  }
   const { db } = requireFirebase();
   const base = collection(db, 'users', uid, 'cardProgress');
   const snapshot = await getDocs(deckId ? query(base, where('deckId', '==', deckId)) : base);
-  return snapshot.docs.map((item) => item.data() as CardProgress);
+  const items = snapshot.docs.map((item) => item.data() as CardProgress);
+  if (!deckId) cacheProgress(uid, items);
+  return items;
 }
 
 export async function listDeckStates(uid: string) {
@@ -339,6 +375,21 @@ export async function getDueReviewQueue(uid: string, deckId: string, pageSize = 
   };
 }
 
+export async function listProgressFromCache(uid: string, deckId?: string) {
+  const memory = progressMemoryCache.get(uid);
+  if (!deckId && memory) return memory.items;
+  const { db } = requireFirebase();
+  const base = collection(db, 'users', uid, 'cardProgress');
+  try {
+    const snapshot = await getDocsFromCache(deckId ? query(base, where('deckId', '==', deckId)) : base);
+    const items = snapshot.docs.map((item) => item.data() as CardProgress);
+    if (!deckId && items.length > 0) cacheProgress(uid, items, 0);
+    return items;
+  } catch {
+    return [];
+  }
+}
+
 export async function getCardProgress(uid: string, cardId: string) {
   const { db } = requireFirebase();
   const snapshot = await getDoc(doc(db, 'users', uid, 'cardProgress', cardId));
@@ -353,6 +404,11 @@ export async function setCardFavorite(uid: string, deckId: string, cardId: strin
     favorite,
     updatedAt: serverTimestamp(),
   }, { merge: true });
+  const cached = progressMemoryCache.get(uid);
+  const index = cached?.indexByCardId.get(cardId);
+  if (cached && index !== undefined) {
+    updateCachedProgress(uid, { ...cached.items[index], favorite });
+  }
 }
 
 function asMillis(value: CardProgress['nextReviewAt']) {
@@ -463,6 +519,7 @@ export async function saveReview(
     updatedAt: Timestamp.fromDate(now),
   }, { merge: true });
   await batch.commit();
+  updateCachedProgress(uid, progress);
   setDoc(doc(db, 'leaderboard', uid), {
     uid,
     xp: increment(xpEarned),

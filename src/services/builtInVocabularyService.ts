@@ -11,6 +11,10 @@ interface TopicDataset { id: string; title: string; categoryCount: number; topic
 
 const dataset = topicDataset as TopicDataset;
 const topics = dataset.categories.flatMap((category) => category.topics.map((topic) => ({ category, topic })));
+const deckCache = new Map<string, Deck[]>();
+const categoryCache = new Map<string, BuiltInVocabularyCategory[]>();
+const vocabularyCache = new Map<string, IndexedVocabularySearchResult[]>();
+const cardCache = new Map<string, Flashcard[]>();
 
 export const BUILT_IN_PATH_ID = dataset.id;
 export const BUILT_IN_WORD_COUNT = dataset.wordCount;
@@ -22,6 +26,11 @@ export interface BuiltInVocabularySearchResult {
   deck: Deck;
   categoryTitle: string;
   topicTitle: string;
+}
+
+interface IndexedVocabularySearchResult extends BuiltInVocabularySearchResult {
+  normalizedTerm: string;
+  searchText: string;
 }
 
 export interface BuiltInVocabularyCategory {
@@ -49,20 +58,26 @@ function topicOrderFromDeckId(deckId: string) {
 export function isBuiltInDeckId(deckId: string) { return topicOrderFromDeckId(deckId) !== null; }
 
 export function listBuiltInDecks(uid: string): Deck[] {
-  return topics.map(({ category, topic }) => ({
+  const cached = deckCache.get(uid);
+  if (cached) return cached;
+  const decks = topics.map(({ category, topic }) => ({
     id: builtInDeckId(uid, topic.order), ownerId: uid,
     title: topic.titleEnglish ? `${topic.title} (${topic.titleEnglish})` : topic.title,
     description: `Bài ${topic.order}/${dataset.topicCount} · Nhóm ${category.title}`,
     topic: topic.title, sourceLanguage: 'Tiếng Anh', targetLanguage: 'Tiếng Việt',
-    color: '#6558D3', isPublic: false, cardCount: topic.cards.length,
+    color: '#087A9B', isPublic: false, cardCount: topic.cards.length,
     copiedFromDeckId: null, seedId: dataset.id, pathId: dataset.id, pathTitle: dataset.title,
     pathOrder: topic.order, categoryId: category.id, categoryTitle: category.title,
     categoryOrder: category.order, topicId: topic.id, topicOrder: topic.order,
     createdAt: null, updatedAt: null,
   }));
+  deckCache.set(uid, decks);
+  return decks;
 }
 
 export function listBuiltInCategories(uid: string): BuiltInVocabularyCategory[] {
+  const cached = categoryCache.get(uid);
+  if (cached) return cached;
   const decksByCategory = new Map<string, Deck[]>();
   listBuiltInDecks(uid).forEach((deck) => {
     if (!deck.categoryId) return;
@@ -71,7 +86,7 @@ export function listBuiltInCategories(uid: string): BuiltInVocabularyCategory[] 
     decksByCategory.set(deck.categoryId, categoryDecks);
   });
 
-  return dataset.categories.map((category) => {
+  const categories = dataset.categories.map((category) => {
     const categoryTopics = decksByCategory.get(category.id) ?? [];
     return {
       id: category.id,
@@ -81,6 +96,8 @@ export function listBuiltInCategories(uid: string): BuiltInVocabularyCategory[] 
       topics: categoryTopics,
     };
   });
+  categoryCache.set(uid, categories);
+  return categories;
 }
 
 export function getBuiltInDeck(deckId: string): Deck | null {
@@ -91,13 +108,17 @@ export function getBuiltInDeck(deckId: string): Deck | null {
 
 export function listBuiltInCards(deckId: string): Flashcard[] | null {
   const order = topicOrderFromDeckId(deckId); if (order === null) return null;
+  const cached = cardCache.get(deckId);
+  if (cached) return cached;
   const entry = topics.find(({ topic }) => topic.order === order); if (!entry) return null;
-  return entry.topic.cards.map((card, index) => ({
+  const cards = entry.topic.cards.map((card, index) => ({
     id: builtInCardId(order, index + 1), deckId, term: card.term,
     termNormalized: card.term.trim().toLocaleLowerCase('en-US'), meaning: card.meaning,
     example: card.example, pronunciation: card.pronunciation, imageUrl: card.imageUrl,
     partOfSpeech: card.partOfSpeech, sourceOrder: card.sourceOrder, createdAt: null, updatedAt: null,
   }));
+  cardCache.set(deckId, cards);
+  return cards;
 }
 
 export function getBuiltInCard(deckId: string, cardId: string) {
@@ -118,34 +139,33 @@ export function searchBuiltInVocabulary(uid: string, query: string): BuiltInVoca
   const normalizedQuery = normalizeSearchText(query);
   if (!normalizedQuery) return listBuiltInVocabulary(uid);
 
-  return listBuiltInVocabulary(uid).filter(({ card }) => (
-    normalizeSearchText(card.term).includes(normalizedQuery)
-    || normalizeSearchText(card.meaning).includes(normalizedQuery)
-    || normalizeSearchText(card.example).includes(normalizedQuery)
+  return getVocabularyIndex(uid).filter(({ searchText }) => (
+    searchText.includes(normalizedQuery)
   )).sort((left, right) => {
-    const leftTerm = normalizeSearchText(left.card.term);
-    const rightTerm = normalizeSearchText(right.card.term);
-    const leftStarts = leftTerm.startsWith(normalizedQuery) ? 0 : 1;
-    const rightStarts = rightTerm.startsWith(normalizedQuery) ? 0 : 1;
-    return leftStarts - rightStarts || leftTerm.localeCompare(rightTerm, 'en');
+    const leftStarts = left.normalizedTerm.startsWith(normalizedQuery) ? 0 : 1;
+    const rightStarts = right.normalizedTerm.startsWith(normalizedQuery) ? 0 : 1;
+    return leftStarts - rightStarts || left.normalizedTerm.localeCompare(right.normalizedTerm, 'en');
   });
 }
 
-export function listBuiltInVocabulary(uid: string): BuiltInVocabularySearchResult[] {
+function getVocabularyIndex(uid: string): IndexedVocabularySearchResult[] {
+  const cached = vocabularyCache.get(uid);
+  if (cached) return cached;
   const decksByOrder = new Map(
     listBuiltInDecks(uid).map((deck) => [deck.topicOrder, deck]),
   );
 
-  return topics.flatMap(({ category, topic }) => {
+  const vocabulary = topics.flatMap(({ category, topic }) => {
     const deck = decksByOrder.get(topic.order);
     if (!deck) return [];
 
     return topic.cards.flatMap((sourceCard, index) => {
+      const normalizedTerm = normalizeSearchText(sourceCard.term);
       const card: Flashcard = {
         id: builtInCardId(topic.order, index + 1),
         deckId: deck.id,
         term: sourceCard.term,
-        termNormalized: normalizeSearchText(sourceCard.term),
+        termNormalized: normalizedTerm,
         meaning: sourceCard.meaning,
         example: sourceCard.example,
         pronunciation: sourceCard.pronunciation,
@@ -156,7 +176,20 @@ export function listBuiltInVocabulary(uid: string): BuiltInVocabularySearchResul
         updatedAt: null,
       };
 
-      return [{ card, deck, categoryTitle: category.title, topicTitle: topic.title }];
+      return [{
+        card,
+        deck,
+        categoryTitle: category.title,
+        topicTitle: topic.title,
+        normalizedTerm,
+        searchText: `${normalizedTerm}\n${normalizeSearchText(sourceCard.meaning)}\n${normalizeSearchText(sourceCard.example)}`,
+      }];
     });
   });
+  vocabularyCache.set(uid, vocabulary);
+  return vocabulary;
+}
+
+export function listBuiltInVocabulary(uid: string): BuiltInVocabularySearchResult[] {
+  return getVocabularyIndex(uid);
 }

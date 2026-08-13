@@ -27,7 +27,7 @@ export async function scheduleDailyReminder(
       name: "Nhắc ôn tập hằng ngày",
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#6558D3",
+      lightColor: "#087A9B",
     });
   }
   if (previousId)

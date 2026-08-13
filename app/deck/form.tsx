@@ -4,13 +4,13 @@ import { AppScreen } from '@/src/components/AppScreen';
 import { LoadingView } from '@/src/components/StateView';
 import { useAuth } from '@/src/context/AuthContext';
 import { createDeck, getDeck, updateDeck } from '@/src/services/deckService';
-import { colors } from '@/src/theme/colors';
+import { colors, resolveDeckColor } from '@/src/theme/colors';
 import { friendlyError } from '@/src/utils/errors';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
 
-const palette = ['#6558D3', '#EF6C78', '#F2A33A', '#2EA98C', '#3B82F6'];
+const palette = ['#087A9B', '#EF6C78', '#F2A33A', '#2EA98C', '#3B82F6'];
 
 export default function DeckFormScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -33,7 +33,7 @@ export default function DeckFormScreen() {
       if (!deck || deck.ownerId !== user?.uid || deck.pathId) throw new Error('Không thể sửa bộ từ này.');
       setTitle(deck.title); setDescription(deck.description); setTopic(deck.topic);
       setSourceLanguage(deck.sourceLanguage); setTargetLanguage(deck.targetLanguage);
-      setColor(deck.color); setIsPublic(deck.isPublic);
+      setColor(resolveDeckColor(deck.color)); setIsPublic(deck.isPublic);
     }).catch((error) => Alert.alert('Không thể tải bộ từ', friendlyError(error))).finally(() => setLoading(false));
   }, [id, user]);
 

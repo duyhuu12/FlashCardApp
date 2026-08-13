@@ -1,4 +1,4 @@
-import { colors, shadows } from '@/src/theme/colors';
+import { colors, resolveDeckColor, shadows } from '@/src/theme/colors';
 import type { Deck } from '@/src/types/models';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 export function DeckCard({ deck, onPress }: { deck: Deck; onPress(): void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && { opacity: 0.82 }]}>
-      <View style={[styles.icon, { backgroundColor: deck.color || colors.primary }]}><Ionicons name="layers" size={24} color="#fff" /></View>
+      <View style={[styles.icon, { backgroundColor: resolveDeckColor(deck.color) }]}><Ionicons name="layers" size={24} color="#fff" /></View>
       <View style={styles.info}>
         <View style={styles.titleRow}><Text style={styles.title} numberOfLines={1}>{deck.title}</Text>{deck.isPublic ? <Ionicons name="globe-outline" size={17} color={colors.primary} /> : null}</View>
         <Text style={styles.description} numberOfLines={2}>{deck.description || deck.topic || 'Bộ từ vựng của bạn'}</Text>
