@@ -6,6 +6,7 @@ export interface UserProfile {
   uid: string;
   displayName: string;
   email: string;
+  avatarId?: string;
   reminderEnabled: boolean;
   reminderHour: number;
   reminderMinute: number;
@@ -16,6 +17,7 @@ export interface UserProfile {
 export interface Deck {
   id: string;
   ownerId: string;
+  authorName?: string;
   title: string;
   description: string;
   topic: string;
@@ -106,6 +108,7 @@ export interface DeckState {
   initializedCardCount: number;
   reviewedCardCount: number;
   masteredCount: number;
+  goldCompletedAt?: FirestoreDate | null;
   lastStudiedCardId?: string | null;
   lastStudiedAt?: FirestoreDate;
 }
@@ -119,6 +122,7 @@ export interface StudyQueue {
 export interface LeaderboardEntry {
   uid: string;
   displayName: string;
+  avatarId?: string;
   xp: number;
   reviewedCount: number;
 }

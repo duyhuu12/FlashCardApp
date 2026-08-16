@@ -4,7 +4,7 @@ import { ErrorView, LoadingView } from '@/src/components/StateView';
 import { useAuth } from '@/src/context/AuthContext';
 import { getCard, getCardProgress, getDeck, setCardFavorite } from '@/src/services/deckService';
 import { speakEnglish, stopSpeaking } from '@/src/services/speechService';
-import { colors, shadows } from '@/src/theme/colors';
+import { useAppTheme, useThemedStyles, type AppColors, type AppShadows } from '@/src/theme/colors';
 import type { CardProgress, Deck, Flashcard } from '@/src/types/models';
 import { friendlyError } from '@/src/utils/errors';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +12,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
-function learningStatus(progress: CardProgress | null) {
+function learningStatus(progress: CardProgress | null, colors: AppColors) {
   if (!progress?.lastReviewedAt) return { label: 'Chưa học', icon: 'sparkles-outline' as const, color: colors.primary, soft: colors.primarySoft };
   if (progress.mastered) return { label: 'Đã thuộc', icon: 'checkmark-circle-outline' as const, color: colors.success, soft: colors.successSoft };
   if (progress.lastRating === 'again' || progress.lastRating === 'hard') return { label: 'Từ khó', icon: 'alert-circle-outline' as const, color: colors.warning, soft: colors.warningSoft };
@@ -20,6 +20,8 @@ function learningStatus(progress: CardProgress | null) {
 }
 
 export default function WordDetailScreen() {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const { deckId, cardId } = useLocalSearchParams<{ deckId: string; cardId: string }>();
   const { user } = useAuth();
   const router = useRouter();
@@ -78,7 +80,7 @@ export default function WordDetailScreen() {
   if (loading) return <AppScreen><LoadingView message="Đang tải chi tiết từ..." /></AppScreen>;
   if (error || !card || !deck) return <AppScreen><ErrorView message={error || 'Không tìm thấy từ.'} onRetry={load} /></AppScreen>;
 
-  const status = learningStatus(progress);
+  const status = learningStatus(progress, colors);
   const isFavorite = Boolean(progress?.favorite);
 
   return (
@@ -146,7 +148,7 @@ export default function WordDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors, shadows: AppShadows) => StyleSheet.create({
   screen: { width: '100%', maxWidth: 620, alignSelf: 'center', paddingBottom: 34 },
   hero: { alignItems: 'center', gap: 8, padding: 22, borderRadius: 26, backgroundColor: colors.surface, ...shadows.card },
   heroActions: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

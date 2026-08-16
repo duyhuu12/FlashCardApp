@@ -8,7 +8,7 @@ export default function IndexScreen() {
   if (loading)
     return (
       <AppScreen>
-        <LoadingView message="Đang khởi động PenguinLingo..." />
+        <LoadingView message="Đang khởi động DolphinLingo..." />
       </AppScreen>
     );
   return <Redirect href={user ? "/(tabs)" : "/(auth)/login"} />;

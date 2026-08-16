@@ -37,7 +37,7 @@ export async function scheduleDailyReminder(
   return Notifications.scheduleNotificationAsync({
     content: {
       title: "Đến giờ ôn từ rồi! 📚",
-      body: "Dành vài phút với PenguinLingo để ghi nhớ lâu hơn.",
+      body: "Dành vài phút với DolphinLingo để ghi nhớ lâu hơn.",
       data: { url: "/(tabs)" },
     },
     trigger: {

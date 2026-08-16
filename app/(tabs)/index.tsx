@@ -1,5 +1,6 @@
 import { AppScreen } from "@/src/components/AppScreen";
 import { EmptyView, ErrorView, LoadingView } from "@/src/components/StateView";
+import { getAvatarSource } from "@/src/constants/avatarOptions";
 import { useAuth } from "@/src/context/AuthContext";
 import {
   getLearningStats,
@@ -7,14 +8,20 @@ import {
   listOwnedDecks,
   listOwnedDecksFromCache,
 } from "@/src/services/deckService";
-import { colors, shadows } from "@/src/theme/colors";
+import {
+  useAppTheme,
+  useThemedStyles,
+  type AppColors,
+  type AppShadows,
+} from "@/src/theme/colors";
 import type { Deck, DeckState, LearningStats } from "@/src/types/models";
 import { friendlyError } from "@/src/utils/errors";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
+  Image,
   Modal,
   Pressable,
   RefreshControl,
@@ -23,6 +30,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 const emptyStats: LearningStats = {
   totalDecks: 0,
   totalCards: 0,
@@ -32,9 +40,29 @@ const emptyStats: LearningStats = {
   reviewedLast7Days: 0,
 };
 const TOPIC_PATH_ID = "en-vi-word-topics-v1";
+const STICKY_SECTION_TRIGGER_OFFSET = 82;
 const PATH_OFFSETS = [-82, -30, 48, 84, 30, -48, -86, -36, 44, 82, 24, -56];
+const SECTION_PALETTES = [
+  { main: "#1687A7", dark: "#0D637B" },
+  { main: "#6B63D9", dark: "#4F48B4" },
+  { main: "#D47732", dark: "#A9561D" },
+  { main: "#2F9A72", dark: "#217456" },
+  { main: "#C85C86", dark: "#9D3E67" },
+  { main: "#5B77C8", dark: "#3F579E" },
+  { main: "#A05EB5", dark: "#7D438F" },
+  { main: "#BF6A49", dark: "#934B31" },
+  { main: "#508A36", dark: "#376921" },
+  { main: "#B25C72", dark: "#884356" },
+] as const;
+
+function getSectionPalette(categoryOrder?: number | null) {
+  const index = Math.max(0, (categoryOrder ?? 1) - 1) % SECTION_PALETTES.length;
+  return SECTION_PALETTES[index];
+}
 
 export default function HomeScreen() {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const { user, profile } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -46,11 +74,48 @@ export default function HomeScreen() {
   const [error, setError] = useState("");
   const [selectedDeck, setSelectedDeck] = useState<Deck | null>(null);
   const [sectionPickerVisible, setSectionPickerVisible] = useState(false);
-  const [stickyCategoryOrder, setStickyCategoryOrder] = useState<number | null>(null);
+  const [stickyCategoryOrder, setStickyCategoryOrder] = useState<number | null>(
+    null,
+  );
   const hasLoaded = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
   const roadTopRef = useRef(0);
   const sectionOffsetsRef = useRef<Record<number, number>>({});
+  const activePulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(activePulse, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+        Animated.timing(activePulse, {
+          toValue: 0,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [activePulse]);
+
+  const activeRingAnimation = {
+    opacity: activePulse.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.9, 0.28],
+    }),
+    transform: [
+      {
+        scale: activePulse.interpolate({
+          inputRange: [0, 1],
+          outputRange: [1, 1.17],
+        }),
+      },
+    ],
+  };
 
   const load = useCallback(
     async (silent = false) => {
@@ -94,13 +159,10 @@ export default function HomeScreen() {
   );
 
   const pathDecks = useMemo(
-    () => decks
-      .filter((deck) => deck.pathId === TOPIC_PATH_ID)
-      .sort((left, right) => (left.pathOrder ?? 0) - (right.pathOrder ?? 0)),
-    [decks],
-  );
-  const personalDecks = useMemo(
-    () => decks.filter((deck) => deck.pathId !== TOPIC_PATH_ID),
+    () =>
+      decks
+        .filter((deck) => deck.pathId === TOPIC_PATH_ID)
+        .sort((left, right) => (left.pathOrder ?? 0) - (right.pathOrder ?? 0)),
     [decks],
   );
   const pathSections = useMemo(() => {
@@ -110,7 +172,10 @@ export default function HomeScreen() {
       const categoryOrder = deck.categoryOrder ?? 0;
       if (seen.has(categoryOrder)) return;
       seen.add(categoryOrder);
-      sections.push({ categoryOrder, categoryTitle: deck.categoryTitle || deck.topic });
+      sections.push({
+        categoryOrder,
+        categoryTitle: deck.categoryTitle || deck.topic,
+      });
     });
     return sections;
   }, [pathDecks]);
@@ -118,20 +183,29 @@ export default function HomeScreen() {
   const stickySection = pathSections.find(
     (section) => section.categoryOrder === stickyCategoryOrder,
   );
+  const stickyPalette = getSectionPalette(stickySection?.categoryOrder);
 
-  const updateStickySection = useCallback((scrollY: number) => {
-    let nextCategoryOrder: number | null = null;
-    for (const section of pathSections) {
-      const sectionOffset = sectionOffsetsRef.current[section.categoryOrder];
-      if (sectionOffset === undefined) continue;
-      if (scrollY + 4 >= roadTopRef.current + sectionOffset) {
-        nextCategoryOrder = section.categoryOrder;
-      } else {
-        break;
+  const updateStickySection = useCallback(
+    (scrollY: number) => {
+      let nextCategoryOrder: number | null = null;
+      for (const section of pathSections) {
+        const sectionOffset = sectionOffsetsRef.current[section.categoryOrder];
+        if (sectionOffset === undefined) continue;
+        if (
+          scrollY + STICKY_SECTION_TRIGGER_OFFSET >=
+          roadTopRef.current + sectionOffset
+        ) {
+          nextCategoryOrder = section.categoryOrder;
+        } else {
+          break;
+        }
       }
-    }
-    setStickyCategoryOrder((current) => current === nextCategoryOrder ? current : nextCategoryOrder);
-  }, [pathSections]);
+      setStickyCategoryOrder((current) =>
+        current === nextCategoryOrder ? current : nextCategoryOrder,
+      );
+    },
+    [pathSections],
+  );
 
   function jumpToSection(categoryOrder: number) {
     const sectionOffset = sectionOffsetsRef.current[categoryOrder];
@@ -160,62 +234,68 @@ export default function HomeScreen() {
       const completion = deck.cardCount ? reviewed / deck.cardCount : 0;
       return deck.cardCount > 0 && isUnlocked(deck) && completion < 0.8;
     }) ??
-    pathDecks[0] ??
-    personalDecks.find((deck) => deck.cardCount > 0);
-
-  function startTodayLesson() {
-    if (activeDeck) router.push(`/review/${activeDeck.id}`);
-    else router.push("/deck/form");
-  }
-
-  const masteredPercent = stats.totalCards
-    ? Math.round((stats.mastered / stats.totalCards) * 100)
+    pathDecks[0];
+  const selectedDeckState = selectedDeck
+    ? deckStates[selectedDeck.id]
+    : undefined;
+  const selectedDeckPercent = selectedDeck?.cardCount
+    ? Math.min(
+        100,
+        Math.round(
+          ((selectedDeckState?.reviewedCardCount ?? 0) /
+            selectedDeck.cardCount) *
+            100,
+        ),
+      )
     : 0;
-  const todayTarget = Math.min(
-    stats.dailyGoal ?? 30,
-    (stats.due ?? 0) +
-      Math.min(10, stats.newAvailable ?? 0) +
-      Math.min(5, stats.hardCount ?? 0),
-  );
-  const todayProgress = Math.min(
-    stats.reviewedToday ?? 0,
-    stats.dailyGoal ?? 30,
-  );
-  const todayPercent = Math.round(
-    (todayProgress / (stats.dailyGoal ?? 30)) * 100,
-  );
+  const selectedDeckCompleted = selectedDeckPercent >= 80;
+  const selectedDeckGold = Boolean(selectedDeckState?.goldCompletedAt);
 
   return (
     <AppScreen
       contentStyle={styles.screen}
       scrollRef={scrollRef}
       scrollProps={{
-        onScroll: (event) => updateStickySection(event.nativeEvent.contentOffset.y),
+        onScroll: (event) =>
+          updateStickySection(event.nativeEvent.contentOffset.y),
         scrollEventThrottle: 16,
       }}
-      floatingContent={stickySection ? (
-        <View
-          pointerEvents="box-none"
-          style={[styles.stickySectionWrapper, { top: insets.top + 8 }]}>
-          <View style={styles.stickySectionBanner}>
-            <View style={styles.stickySectionIcon}>
-              <Ionicons name="flag" size={21} color="#fff" />
-            </View>
-            <View style={styles.sectionBannerCopy}>
-              <Text style={styles.sectionOverline}>PHẦN {stickySection.categoryOrder}</Text>
-              <Text style={styles.sectionTitle}>{stickySection.categoryTitle}</Text>
-            </View>
+      floatingContent={
+        stickySection ? (
+          <View
+            pointerEvents="box-none"
+            style={[styles.stickySectionWrapper, { top: insets.top + 8 }]}
+          >
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Chọn phần học"
-              hitSlop={8}
+              accessibilityLabel={`Chọn phần học, phần ${stickySection.categoryOrder} ${stickySection.categoryTitle}`}
               onPress={() => setSectionPickerVisible(true)}
-              style={({ pressed }) => [styles.sectionListButton, pressed && styles.stopPressed]}>
-              <Ionicons name="list" size={29} color="#fff" />
+              style={[
+                styles.stickySectionBanner,
+                {
+                  backgroundColor: stickyPalette.main,
+                  borderBottomColor: stickyPalette.dark,
+                },
+              ]}
+            >
+              <View style={styles.stickySectionIcon}>
+                <Ionicons name="flag" size={21} color="#fff" />
+              </View>
+              <View style={styles.sectionBannerCopy}>
+                <Text style={styles.sectionOverline}>
+                  PHẦN {stickySection.categoryOrder}
+                </Text>
+                <Text style={styles.sectionTitle}>
+                  {stickySection.categoryTitle}
+                </Text>
+              </View>
+              <View style={styles.sectionListButton}>
+                <Ionicons name="list" size={29} color="#fff" />
+              </View>
             </Pressable>
           </View>
-        </View>
-      ) : null}
+        ) : null
+      }
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -245,68 +325,12 @@ export default function HomeScreen() {
           </Text>
         </View>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {(profile?.displayName || user?.email || "L")
-              .charAt(0)
-              .toUpperCase()}
-          </Text>
+          <Image
+            source={getAvatarSource(profile?.avatarId)}
+            resizeMode="cover"
+            style={styles.avatarImage}
+          />
         </View>
-      </View>
-
-      <View style={styles.courseBanner}>
-        <View style={styles.courseBannerIcon}>
-          <Ionicons name="map" size={29} color="#fff" />
-        </View>
-        <View style={styles.courseBannerCopy}>
-          <Text style={styles.courseOverline}>LỘ TRÌNH TỪ VỰNG</Text>
-          <Text style={styles.courseTitle}>Chinh phục 3.000 từ Anh–Việt</Text>
-          <Text style={styles.courseMeta}>
-            {pathDecks.length} bài học ·{" "}
-            {stats.mastered.toLocaleString("vi-VN")} từ đã thuộc
-          </Text>
-        </View>
-        <View style={styles.coursePercent}>
-          <Text style={styles.coursePercentText}>{masteredPercent}%</Text>
-        </View>
-      </View>
-
-      <View style={styles.missionCard}>
-        <View style={styles.missionIcon}>
-          <Ionicons name="flag" size={27} color={colors.primary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.missionOverline}>NHIỆM VỤ HÔM NAY</Text>
-          <Text style={styles.missionTitle}>
-            {todayProgress >= (stats.dailyGoal ?? 30)
-              ? "Đã hoàn thành mục tiêu hôm nay!"
-              : `${todayTarget || 10} thẻ · khoảng ${Math.max(3, Math.ceil((todayTarget || 10) / 4))} phút`}
-          </Text>
-          <Text style={styles.missionMeta}>
-            {todayProgress}/{stats.dailyGoal ?? 30} thẻ · {stats.due ?? 0} đến
-            hạn · {Math.min(10, stats.newAvailable ?? 0)} từ mới
-          </Text>
-          <View style={styles.missionTrack}>
-            <View
-              style={[
-                styles.missionFill,
-                { width: `${Math.min(todayPercent, 100)}%` },
-              ]}
-            />
-          </View>
-        </View>
-        <Pressable style={styles.goButton} onPress={startTodayLesson}>
-          <Text style={styles.goText}>ĐI</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.journeyHeader}>
-        <View>
-          <Text style={styles.journeyTitle}>Đường học của bạn</Text>
-          <Text style={styles.journeyHint}>
-            Hoàn thành 80% để mở bài kế tiếp
-          </Text>
-        </View>
-        <Ionicons name="footsteps" size={26} color={colors.primary} />
       </View>
 
       {loading ? (
@@ -325,63 +349,75 @@ export default function HomeScreen() {
           style={styles.road}
           onLayout={(event) => {
             roadTopRef.current = event.nativeEvent.layout.y;
-          }}>
+          }}
+        >
           <View style={styles.roadLine} />
           {pathDecks.map((deck, index) => {
+            const sectionPalette = getSectionPalette(deck.categoryOrder);
             const unlocked = isUnlocked(deck);
             const reviewed = deckStates[deck.id]?.reviewedCardCount ?? 0;
             const lessonPercent = deck.cardCount
               ? Math.min(100, Math.round((reviewed / deck.cardCount) * 100))
               : 0;
             const completed = lessonPercent >= 80;
+            const gold = Boolean(deckStates[deck.id]?.goldCompletedAt);
             const active = activeDeck?.id === deck.id;
             const previousDeck = pathDecks[index - 1];
             const showSection =
               index === 0 || deck.categoryTitle !== previousDeck?.categoryTitle;
             const checkpoint = (index + 1) % 5 === 0;
-            const nodeColor = completed
-              ? colors.success
-              : unlocked
-                ? colors.primary
-                : "#A9A8B7";
+            const nodeColor = gold
+              ? "#F2B735"
+              : completed
+                ? colors.success
+                : unlocked
+                  ? sectionPalette.main
+                  : colors.muted;
             const nodeIcon = !unlocked
               ? "lock-closed"
-              : completed
-                ? "checkmark"
-                : active
-                  ? "play"
-                  : checkpoint
-                    ? "star"
-                    : "book";
+              : gold
+                ? "trophy"
+                : completed
+                  ? "checkmark"
+                  : active
+                    ? "play"
+                    : checkpoint
+                      ? "star"
+                      : "book";
             const offset = PATH_OFFSETS[index % PATH_OFFSETS.length];
             return (
               <View
                 key={deck.id}
                 style={styles.roadStep}
-                onLayout={showSection ? (event) => {
-                  sectionOffsetsRef.current[deck.categoryOrder ?? 0] = event.nativeEvent.layout.y + 16;
-                } : undefined}>
+                onLayout={
+                  showSection
+                    ? (event) => {
+                        sectionOffsetsRef.current[deck.categoryOrder ?? 0] =
+                          event.nativeEvent.layout.y + 16;
+                      }
+                    : undefined
+                }
+              >
                 {showSection ? (
                   <View style={styles.sectionBanner}>
-                    <View style={styles.sectionBannerIcon}>
-                      <Ionicons name="flag" size={20} color="#fff" />
-                    </View>
                     <View style={styles.sectionBannerCopy}>
-                      <Text style={styles.sectionOverline}>
+                      <Text
+                        style={[
+                          styles.roadSectionOverline,
+                          { color: sectionPalette.main },
+                        ]}
+                      >
                         PHẦN {deck.categoryOrder}
                       </Text>
-                      <Text style={styles.sectionTitle}>
+                      <Text
+                        style={[
+                          styles.roadSectionTitle,
+                          { color: sectionPalette.main },
+                        ]}
+                      >
                         {deck.categoryTitle}
                       </Text>
                     </View>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Chọn phần học"
-                      hitSlop={8}
-                      onPress={() => setSectionPickerVisible(true)}
-                      style={({ pressed }) => [styles.sectionListButton, pressed && styles.stopPressed]}>
-                      <Ionicons name="list" size={26} color="#fff" />
-                    </Pressable>
                   </View>
                 ) : null}
                 <View style={styles.pathNodeRow}>
@@ -396,16 +432,29 @@ export default function HomeScreen() {
                       pressed && styles.stopPressed,
                     ]}
                   >
-                    {active ? <View style={styles.activeRing} /> : null}
+                    {active ? (
+                      <Animated.View
+                        style={[
+                          styles.activeRing,
+                          activeRingAnimation,
+                          {
+                            borderColor: `${sectionPalette.main}45`,
+                            backgroundColor: `${sectionPalette.main}24`,
+                          },
+                        ]}
+                      />
+                    ) : null}
                     <View
                       style={[
                         styles.nodeShadow,
                         {
                           backgroundColor: completed
-                            ? "#207B5A"
+                            ? gold
+                              ? "#BE7D09"
+                              : colors.success
                             : unlocked
-                              ? colors.primaryDark
-                              : "#7E7D8D",
+                              ? sectionPalette.dark
+                              : colors.border,
                         },
                       ]}
                     >
@@ -419,7 +468,11 @@ export default function HomeScreen() {
                         />
                       </View>
                     </View>
-                    {checkpoint ? (
+                    {gold ? (
+                      <View style={styles.goldBadge}>
+                        <Text style={styles.goldBadgeText}>GOLD</Text>
+                      </View>
+                    ) : checkpoint ? (
                       <View style={styles.checkpointBadge}>
                         <Ionicons
                           name="star"
@@ -453,48 +506,6 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {personalDecks.length ? (
-        <View style={styles.personalSection}>
-          <View style={styles.personalHeader}>
-            <View>
-              <Text style={styles.journeyTitle}>Bộ từ cá nhân</Text>
-              <Text style={styles.journeyHint}>Lộ trình riêng do bạn tạo</Text>
-            </View>
-            <Pressable
-              style={styles.addPersonalButton}
-              onPress={() => router.push("/deck/form")}
-            >
-              <Ionicons name="add" size={23} color="#fff" />
-            </Pressable>
-          </View>
-          {personalDecks.map((deck) => (
-            <Pressable
-              key={deck.id}
-              onPress={() => setSelectedDeck(deck)}
-              style={({ pressed }) => [
-                styles.personalCard,
-                pressed && styles.stopPressed,
-              ]}
-            >
-              <View
-                style={[
-                  styles.personalIcon,
-                  { backgroundColor: deck.color || colors.primary },
-                ]}
-              >
-                <Ionicons name="layers" size={23} color="#fff" />
-              </View>
-              <View style={styles.personalCopy}>
-                <Text style={styles.personalTitle}>{deck.title}</Text>
-                <Text style={styles.personalMeta}>
-                  {deck.cardCount} thẻ · Chạm để học
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
       <Modal
         visible={Boolean(selectedDeck)}
         transparent
@@ -539,6 +550,42 @@ export default function HomeScreen() {
                     ]}
                   />
                 </View>
+                {selectedDeckCompleted ? (
+                  <Pressable
+                    style={styles.goldAction}
+                    onPress={() => {
+                      setSelectedDeck(null);
+                      router.push({
+                        pathname: "/practice/[deckId]",
+                        params: {
+                          deckId: selectedDeck.id,
+                          mode: "gold",
+                        },
+                      });
+                    }}
+                  >
+                    <View style={styles.goldActionIcon}>
+                      <Ionicons name="trophy" size={20} color="#8A5900" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.goldActionTitle}>
+                        {selectedDeckGold
+                          ? "Ôn lại bài tập Gold"
+                          : "Ôn tập để mở Gold"}
+                      </Text>
+                      <Text style={styles.goldActionHint}>
+                        {selectedDeckGold
+                          ? "Củng cố lại kiến thức của bài học này"
+                          : "Hoàn thành bài ôn để chuyển trạng thái sang Gold"}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={20}
+                      color="#8A5900"
+                    />
+                  </Pressable>
+                ) : null}
                 <View style={styles.sheetActions}>
                   <Pressable
                     style={styles.primaryAction}
@@ -567,60 +614,6 @@ export default function HomeScreen() {
                     <Text style={styles.secondaryActionText}>Danh sách từ</Text>
                   </Pressable>
                 </View>
-                <Text style={styles.practiceTitle}>Luyện tập nhanh</Text>
-                <View style={styles.practiceGrid}>
-                  {[
-                    ["mistakes", "close-circle", "Từ sai"],
-                    ["hard", "fitness", "Từ khó"],
-                    ["due", "time", "Đến hạn"],
-                    ["new", "sparkles", "Từ mới"],
-                  ].map(([mode, icon, label]) => (
-                    <Pressable
-                      key={mode}
-                      style={styles.practiceItem}
-                      onPress={() => {
-                        setSelectedDeck(null);
-                        router.push({
-                          pathname: "/review/[deckId]",
-                          params: { deckId: selectedDeck.id, mode },
-                        });
-                      }}
-                    >
-                      <Ionicons
-                        name={icon as keyof typeof Ionicons.glyphMap}
-                        size={21}
-                        color={colors.primary}
-                      />
-                      <Text style={styles.practiceText}>{label}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-                <View style={styles.practiceGrid}>
-                  {[
-                    ["quiz", "help-circle", "Trắc nghiệm"],
-                    ["match", "git-compare", "Ghép cặp"],
-                    ["write", "create", "Nhập từ"],
-                  ].map(([mode, icon, label]) => (
-                    <Pressable
-                      key={mode}
-                      style={styles.practiceItem}
-                      onPress={() => {
-                        setSelectedDeck(null);
-                        router.push({
-                          pathname: "/practice/[deckId]",
-                          params: { deckId: selectedDeck.id, mode },
-                        });
-                      }}
-                    >
-                      <Ionicons
-                        name={icon as keyof typeof Ionicons.glyphMap}
-                        size={21}
-                        color={colors.primary}
-                      />
-                      <Text style={styles.practiceText}>{label}</Text>
-                    </Pressable>
-                  ))}
-                </View>
               </>
             ) : null}
           </Pressable>
@@ -630,30 +623,42 @@ export default function HomeScreen() {
         visible={sectionPickerVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setSectionPickerVisible(false)}>
+        onRequestClose={() => setSectionPickerVisible(false)}
+      >
         <Pressable
           style={styles.modalBackdrop}
-          onPress={() => setSectionPickerVisible(false)}>
-          <Pressable style={styles.sectionPickerSheet} onPress={() => undefined}>
+          onPress={() => setSectionPickerVisible(false)}
+        >
+          <Pressable
+            style={styles.sectionPickerSheet}
+            onPress={() => undefined}
+          >
             <View style={styles.sectionPickerHeader}>
               <View>
                 <Text style={styles.sectionPickerTitle}>Chọn phần học</Text>
-                <Text style={styles.sectionPickerHint}>Chuyển nhanh đến nhóm chủ đề bạn muốn học.</Text>
+                <Text style={styles.sectionPickerHint}>
+                  Chuyển nhanh đến nhóm chủ đề bạn muốn học.
+                </Text>
               </View>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Đóng danh sách phần học"
                 hitSlop={8}
-                onPress={() => setSectionPickerVisible(false)}>
+                onPress={() => setSectionPickerVisible(false)}
+              >
                 <Ionicons name="close" size={26} color={colors.muted} />
               </Pressable>
             </View>
             <ScrollView
               style={styles.sectionPickerScroll}
               contentContainerStyle={styles.sectionPickerList}
-              showsVerticalScrollIndicator={false}>
+              showsVerticalScrollIndicator={false}
+            >
               {pathSections.map((section) => {
-                const selected = section.categoryOrder === (stickyCategoryOrder ?? pathSections[0]?.categoryOrder);
+                const sectionPalette = getSectionPalette(section.categoryOrder);
+                const selected =
+                  section.categoryOrder ===
+                  (stickyCategoryOrder ?? pathSections[0]?.categoryOrder);
                 return (
                   <Pressable
                     key={section.categoryOrder}
@@ -662,22 +667,31 @@ export default function HomeScreen() {
                     onPress={() => jumpToSection(section.categoryOrder)}
                     style={({ pressed }) => [
                       styles.sectionPickerItem,
-                      selected && styles.sectionPickerItemSelected,
+                      {
+                        borderColor: selected
+                          ? sectionPalette.main
+                          : `${sectionPalette.main}55`,
+                        backgroundColor: selected
+                          ? `${sectionPalette.main}1F`
+                          : colors.background,
+                      },
                       pressed && styles.stopPressed,
-                    ]}>
-                    <View style={[styles.sectionPickerNumber, selected && styles.sectionPickerNumberSelected]}>
-                      <Text style={[styles.sectionPickerNumberText, selected && styles.sectionPickerNumberTextSelected]}>
-                        {section.categoryOrder}
-                      </Text>
-                    </View>
+                    ]}
+                  >
                     <View style={styles.sectionBannerCopy}>
-                      <Text style={styles.sectionPickerOverline}>PHẦN {section.categoryOrder}</Text>
-                      <Text style={styles.sectionPickerItemTitle}>{section.categoryTitle}</Text>
+                      <Text
+                        style={[
+                          styles.sectionPickerItemTitle,
+                          { color: sectionPalette.main },
+                        ]}
+                      >
+                        {section.categoryTitle}
+                      </Text>
                     </View>
                     <Ionicons
                       name={selected ? "checkmark-circle" : "chevron-forward"}
                       size={23}
-                      color={selected ? colors.primary : colors.muted}
+                      color={selected ? sectionPalette.main : colors.muted}
                     />
                   </Pressable>
                 );
@@ -690,467 +704,439 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    width: "100%",
-    maxWidth: 620,
-    alignSelf: "center",
-    paddingBottom: 36,
-  },
-  topBar: {
-    minHeight: 48,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  languageBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    paddingHorizontal: 11,
-    paddingVertical: 9,
-    borderRadius: 14,
-    backgroundColor: colors.primarySoft,
-  },
-  languageText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
-  metric: { flexDirection: "row", alignItems: "center", gap: 4 },
-  metricValue: { color: colors.text, fontSize: 16, fontWeight: "900" },
+const createStyles = (colors: AppColors, shadows: AppShadows) =>
+  StyleSheet.create({
+    screen: {
+      width: "100%",
+      maxWidth: 620,
+      alignSelf: "center",
+      paddingBottom: 36,
+    },
+    topBar: {
+      minHeight: 48,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+    },
+    languageBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      paddingHorizontal: 11,
+      paddingVertical: 9,
+      borderRadius: 14,
+      backgroundColor: colors.primarySoft,
+    },
+    languageText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
+    metric: { flexDirection: "row", alignItems: "center", gap: 4 },
+    metricValue: { color: colors.text, fontSize: 16, fontWeight: "900" },
 
-  knLabel: {
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: -0.3,
-  },
-  xpValue: { color: "#278AC2" },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.primarySoft,
-    borderWidth: 3,
-    borderColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-    ...shadows.card,
-  },
-  avatarText: { color: colors.primary, fontWeight: "900", fontSize: 17 },
-  courseBanner: {
-    minHeight: 116,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 13,
-    padding: 17,
-    borderRadius: 23,
-    borderBottomWidth: 6,
-    borderBottomColor: colors.primaryDark,
-    backgroundColor: colors.primary,
-    ...shadows.card,
-  },
-  courseBannerIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.17)",
-  },
-  courseBannerCopy: { flex: 1 },
-  courseOverline: {
-    color: "#C9F5F7",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1,
-  },
-  courseTitle: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "900",
-    lineHeight: 24,
-    marginTop: 3,
-  },
-  courseMeta: { color: "#DDF9FA", fontSize: 11, marginTop: 5 },
-  coursePercent: {
-    minWidth: 49,
-    height: 49,
-    borderRadius: 25,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 3,
-    borderColor: "rgba(255,255,255,0.65)",
-  },
-  coursePercentText: { color: "#fff", fontSize: 12, fontWeight: "900" },
-  missionCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 15,
-    borderRadius: 22,
-    backgroundColor: colors.primarySoft,
-    borderWidth: 1,
-    borderColor: "#C5EFF2",
-  },
-  missionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  missionOverline: {
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1,
-  },
-  missionTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: "900",
-    marginTop: 3,
-  },
-  missionMeta: { color: colors.muted, fontSize: 11, marginTop: 3 },
-  missionTrack: {
-    height: 6,
-    borderRadius: 8,
-    backgroundColor: "#BCE7EC",
-    overflow: "hidden",
-    marginTop: 9,
-  },
-  missionFill: { height: "100%", backgroundColor: colors.primary },
-  goButton: {
-    minWidth: 60,
-    minHeight: 48,
-    borderRadius: 16,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    ...shadows.card,
-  },
-  goText: { color: "#fff", fontSize: 17, fontWeight: "900" },
-  journeyHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 4,
-  },
-  journeyTitle: { color: colors.text, fontSize: 21, fontWeight: "900" },
-  journeyHint: { color: colors.muted, marginTop: 4 },
-  road: { position: "relative", paddingTop: 5, paddingBottom: 12 },
-  roadLine: {
-    position: "absolute",
-    top: 82,
-    bottom: 62,
-    left: "50%",
-    borderLeftWidth: 6,
-    borderStyle: "dashed",
-    borderColor: "#D5EBEF",
-  },
-  roadStep: { width: "100%" },
-  sectionBanner: {
-    zIndex: 3,
-    minHeight: 78,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 14,
-    borderRadius: 20,
-    borderBottomWidth: 5,
-    borderBottomColor: colors.primaryDark,
-    backgroundColor: colors.primary,
-    ...shadows.card,
-  },
-  sectionListButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.12)",
-  },
-  stickySectionWrapper: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    zIndex: 30,
-    elevation: 12,
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 4,
-  },
-  stickySectionBanner: {
-    width: "100%",
-    maxWidth: 620,
-    minHeight: 70,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    borderBottomWidth: 5,
-    borderBottomColor: colors.primaryDark,
-    backgroundColor: colors.primary,
-    ...shadows.card,
-  },
-  stickySectionIcon: {
-    width: 43,
-    height: 43,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.16)",
-  },
-  sectionBannerIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.16)",
-  },
-  sectionBannerCopy: { flex: 1 },
-  sectionOverline: {
-    color: "#C9F5F7",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1,
-  },
-  sectionTitle: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "900",
-    marginTop: 2,
-  },
-  pathNodeRow: { height: 138, position: "relative", alignItems: "center" },
-  pathNodePressable: {
-    position: "absolute",
-    top: 5,
-    left: "50%",
-    width: 176,
-    marginLeft: -88,
-    alignItems: "center",
-  },
-  activeRing: {
-    position: "absolute",
-    top: -10,
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    borderWidth: 8,
-    borderColor: "#BCECF1",
-    backgroundColor: "rgba(8,122,155,0.08)",
-  },
-  nodeShadow: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    alignItems: "center",
-    justifyContent: "flex-start",
-    paddingTop: 0,
-    marginBottom: 5,
-  },
-  node: {
-    width: 84,
-    height: 76,
-    borderRadius: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 5,
-    borderColor: "rgba(255,255,255,0.18)",
-  },
-  stopPressed: { opacity: 0.72 },
-  checkpointBadge: {
-    position: "absolute",
-    top: 66,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: colors.warningSoft,
-  },
-  checkpointText: { color: colors.warning, fontSize: 8, fontWeight: "900" },
-  nodeLabel: {
-    maxWidth: 172,
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: "900",
-    textAlign: "center",
-    lineHeight: 17,
-  },
-  nodeLabelLocked: { color: colors.muted },
-  nodeMeta: { color: colors.muted, fontSize: 10, marginTop: 2 },
-  finishStop: {
-    zIndex: 2,
-    alignSelf: "center",
-    minWidth: 210,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 9,
-    padding: 15,
-    borderRadius: 19,
-    borderWidth: 2,
-    borderStyle: "dashed",
-    borderColor: colors.warning,
-    backgroundColor: colors.warningSoft,
-  },
-  finishText: { color: colors.primary, fontWeight: "900" },
-  personalSection: { gap: 10, paddingTop: 8 },
-  personalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  addPersonalButton: {
-    width: 43,
-    height: 43,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primary,
-  },
-  personalCard: {
-    minHeight: 72,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 12,
-    borderRadius: 18,
-    backgroundColor: colors.surface,
-    ...shadows.card,
-  },
-  personalIcon: {
-    width: 47,
-    height: 47,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  personalCopy: { flex: 1 },
-  personalTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
-  personalMeta: { color: colors.muted, fontSize: 12, marginTop: 4 },
-  modalBackdrop: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(6,52,73,0.44)",
-  },
-  sectionPickerSheet: {
-    maxHeight: "78%",
-    padding: 20,
-    paddingBottom: 28,
-    gap: 16,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    backgroundColor: colors.surface,
-  },
-  sectionPickerHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  sectionPickerTitle: { color: colors.text, fontSize: 22, fontWeight: "900" },
-  sectionPickerHint: { color: colors.muted, marginTop: 4 },
-  sectionPickerScroll: { flexGrow: 0 },
-  sectionPickerList: { gap: 9, paddingBottom: 4 },
-  sectionPickerItem: {
-    minHeight: 68,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 13,
-    paddingVertical: 10,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: 18,
-    backgroundColor: colors.background,
-  },
-  sectionPickerItemSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
-  },
-  sectionPickerNumber: {
-    width: 40,
-    height: 40,
-    borderRadius: 13,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.surface,
-  },
-  sectionPickerNumberSelected: { backgroundColor: colors.primary },
-  sectionPickerNumberText: { color: colors.primary, fontWeight: "900" },
-  sectionPickerNumberTextSelected: { color: "#fff" },
-  sectionPickerOverline: {
-    color: colors.primary,
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 1,
-  },
-  sectionPickerItemTitle: { color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 2 },
-  lessonSheet: {
-    padding: 20,
-    paddingBottom: 32,
-    gap: 15,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    backgroundColor: colors.surface,
-  },
-  sheetHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
-  sheetIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sheetTitle: { color: colors.text, fontSize: 19, fontWeight: "900" },
-  sheetMeta: { color: colors.muted, marginTop: 3 },
-  sheetProgress: {
-    height: 8,
-    borderRadius: 8,
-    backgroundColor: colors.border,
-    overflow: "hidden",
-  },
-  sheetProgressFill: { height: "100%", backgroundColor: colors.success },
-  sheetActions: { flexDirection: "row", gap: 10 },
-  primaryAction: {
-    flex: 1,
-    minHeight: 50,
-    borderRadius: 15,
-    flexDirection: "row",
-    gap: 7,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primary,
-  },
-  primaryActionText: { color: "#fff", fontWeight: "900" },
-  secondaryAction: {
-    flex: 1,
-    minHeight: 50,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primarySoft,
-  },
-  secondaryActionText: { color: colors.primary, fontWeight: "900" },
-  practiceTitle: { color: colors.text, fontWeight: "900" },
-  practiceGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  practiceItem: {
-    flexGrow: 1,
-    minWidth: "22%",
-    minHeight: 54,
-    paddingHorizontal: 10,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 3,
-    backgroundColor: colors.background,
-  },
-  practiceText: { color: colors.text, fontSize: 11, fontWeight: "800" },
-});
+    knLabel: {
+      color: colors.primary,
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: -0.3,
+    },
+    xpValue: { color: colors.primary },
+    avatar: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.primarySoft,
+      borderWidth: 3,
+      borderColor: colors.surface,
+      alignItems: "center",
+      justifyContent: "center",
+      overflow: "hidden",
+      ...shadows.card,
+    },
+    avatarImage: { width: "100%", height: "100%" },
+    courseBanner: {
+      minHeight: 116,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 13,
+      padding: 17,
+      borderRadius: 23,
+      borderBottomWidth: 6,
+      borderBottomColor: colors.primaryDark,
+      backgroundColor: colors.primary,
+      ...shadows.card,
+    },
+    courseBannerIcon: {
+      width: 52,
+      height: 52,
+      borderRadius: 17,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "rgba(255,255,255,0.17)",
+    },
+    courseBannerCopy: { flex: 1 },
+    courseOverline: {
+      color: "#C9F5F7",
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 1,
+    },
+    courseTitle: {
+      color: "#fff",
+      fontSize: 18,
+      fontWeight: "900",
+      lineHeight: 24,
+      marginTop: 3,
+    },
+    courseMeta: { color: "#DDF9FA", fontSize: 11, marginTop: 5 },
+    coursePercent: {
+      minWidth: 49,
+      height: 49,
+      borderRadius: 25,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 3,
+      borderColor: "rgba(255,255,255,0.65)",
+    },
+    coursePercentText: { color: "#fff", fontSize: 12, fontWeight: "900" },
+    missionCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      padding: 15,
+      borderRadius: 22,
+      backgroundColor: colors.primarySoft,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    missionIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 16,
+      backgroundColor: colors.surface,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    missionOverline: {
+      color: colors.primary,
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 1,
+    },
+    missionTitle: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: "900",
+      marginTop: 3,
+    },
+    missionMeta: { color: colors.muted, fontSize: 11, marginTop: 3 },
+    missionTrack: {
+      height: 6,
+      borderRadius: 8,
+      backgroundColor: colors.border,
+      overflow: "hidden",
+      marginTop: 9,
+    },
+    missionFill: { height: "100%", backgroundColor: colors.primary },
+    goButton: {
+      minWidth: 60,
+      minHeight: 48,
+      borderRadius: 16,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      ...shadows.card,
+    },
+    goText: { color: "#fff", fontSize: 17, fontWeight: "900" },
+    journeyHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginTop: 4,
+    },
+    journeyTitle: { color: colors.text, fontSize: 21, fontWeight: "900" },
+    journeyHint: { color: colors.muted, marginTop: 4 },
+    road: { position: "relative", paddingTop: 5, paddingBottom: 12 },
+    roadLine: {
+      position: "absolute",
+      top: 82,
+      bottom: 62,
+      left: "50%",
+      borderLeftWidth: 6,
+      borderStyle: "dashed",
+      borderColor: colors.border,
+    },
+    roadStep: { width: "100%" },
+    sectionBanner: {
+      zIndex: 3,
+      minHeight: 64,
+      justifyContent: "center",
+      paddingHorizontal: 8,
+      marginTop: 18,
+      marginBottom: 10,
+    },
+    sectionListButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "rgba(255,255,255,0.12)",
+    },
+    stickySectionWrapper: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      zIndex: 30,
+      elevation: 12,
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingTop: 4,
+    },
+    stickySectionBanner: {
+      width: "100%",
+      maxWidth: 620,
+      minHeight: 70,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingHorizontal: 14,
+      borderRadius: 20,
+      borderBottomWidth: 5,
+      borderBottomColor: colors.primaryDark,
+      backgroundColor: colors.primary,
+      ...shadows.card,
+    },
+    stickySectionIcon: {
+      width: 43,
+      height: 43,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "rgba(255,255,255,0.16)",
+    },
+    sectionBannerCopy: { flex: 1 },
+    roadSectionOverline: {
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 1.2,
+      textAlign: "center",
+    },
+    roadSectionTitle: {
+      color: colors.text,
+      fontSize: 22,
+      fontWeight: "900",
+      marginTop: 4,
+      textAlign: "center",
+    },
+    sectionOverline: {
+      color: "#C9F5F7",
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 1,
+    },
+    sectionTitle: {
+      color: "#fff",
+      fontSize: 18,
+      fontWeight: "900",
+      marginTop: 2,
+    },
+    pathNodeRow: { height: 138, position: "relative", alignItems: "center" },
+    pathNodePressable: {
+      position: "absolute",
+      top: 5,
+      left: "50%",
+      width: 176,
+      marginLeft: -88,
+      alignItems: "center",
+    },
+    activeRing: {
+      position: "absolute",
+      top: -10,
+      width: 104,
+      height: 104,
+      borderRadius: 52,
+      borderWidth: 8,
+      borderColor: colors.primarySoft,
+      backgroundColor: colors.primarySoft,
+    },
+    nodeShadow: {
+      width: 84,
+      height: 84,
+      borderRadius: 42,
+      alignItems: "center",
+      justifyContent: "flex-start",
+      paddingTop: 0,
+      marginBottom: 5,
+    },
+    node: {
+      width: 84,
+      height: 76,
+      borderRadius: 40,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 5,
+      borderColor: "rgba(255,255,255,0.18)",
+    },
+    stopPressed: { opacity: 0.72 },
+    checkpointBadge: {
+      position: "absolute",
+      top: 66,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+      borderRadius: 8,
+      backgroundColor: colors.warningSoft,
+    },
+    checkpointText: { color: colors.warning, fontSize: 8, fontWeight: "900" },
+    goldBadge: {
+      position: "absolute",
+      top: 66,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: "#E1A41D",
+      backgroundColor: "#FFE7A3",
+    },
+    goldBadgeText: { color: "#8A5900", fontSize: 8, fontWeight: "900" },
+    nodeLabel: {
+      maxWidth: 172,
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "900",
+      textAlign: "center",
+      lineHeight: 17,
+    },
+    nodeLabelLocked: { color: colors.muted },
+    nodeMeta: { color: colors.muted, fontSize: 10, marginTop: 2 },
+    finishStop: {
+      zIndex: 2,
+      alignSelf: "center",
+      minWidth: 210,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 9,
+      padding: 15,
+      borderRadius: 19,
+      borderWidth: 2,
+      borderStyle: "dashed",
+      borderColor: colors.warning,
+      backgroundColor: colors.warningSoft,
+    },
+    finishText: { color: colors.primary, fontWeight: "900" },
+    modalBackdrop: {
+      flex: 1,
+      justifyContent: "flex-end",
+      backgroundColor: "rgba(6,52,73,0.44)",
+    },
+    sectionPickerSheet: {
+      maxHeight: "78%",
+      padding: 20,
+      paddingBottom: 28,
+      gap: 16,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      backgroundColor: colors.surface,
+    },
+    sectionPickerHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    sectionPickerTitle: { color: colors.text, fontSize: 22, fontWeight: "900" },
+    sectionPickerHint: { color: colors.muted, marginTop: 4 },
+    sectionPickerScroll: { flexGrow: 0 },
+    sectionPickerList: { gap: 9, paddingBottom: 4 },
+    sectionPickerItem: {
+      minHeight: 68,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingHorizontal: 13,
+      paddingVertical: 10,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      borderRadius: 18,
+      backgroundColor: colors.background,
+    },
+    sectionPickerItemTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: "900",
+    },
+    lessonSheet: {
+      padding: 20,
+      paddingBottom: 32,
+      gap: 15,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      backgroundColor: colors.surface,
+    },
+    sheetHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+    sheetIcon: {
+      width: 50,
+      height: 50,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    sheetTitle: { color: colors.text, fontSize: 19, fontWeight: "900" },
+    sheetMeta: { color: colors.muted, marginTop: 3 },
+    sheetProgress: {
+      height: 8,
+      borderRadius: 8,
+      backgroundColor: colors.border,
+      overflow: "hidden",
+    },
+    sheetProgressFill: { height: "100%", backgroundColor: colors.success },
+    goldAction: {
+      minHeight: 68,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 11,
+      paddingHorizontal: 13,
+      paddingVertical: 10,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: "#E1A41D",
+      backgroundColor: "#FFF2C7",
+    },
+    goldActionIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 13,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#FFD86A",
+    },
+    goldActionTitle: { color: "#6F4800", fontSize: 14, fontWeight: "900" },
+    goldActionHint: { color: "#936B1B", fontSize: 10, marginTop: 2 },
+    sheetActions: { flexDirection: "row", gap: 10 },
+    primaryAction: {
+      flex: 1,
+      minHeight: 50,
+      borderRadius: 15,
+      flexDirection: "row",
+      gap: 7,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.primary,
+    },
+    primaryActionText: { color: "#fff", fontWeight: "900" },
+    secondaryAction: {
+      flex: 1,
+      minHeight: 50,
+      borderRadius: 15,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.primarySoft,
+    },
+    secondaryActionText: { color: colors.primary, fontWeight: "900" },
+  });

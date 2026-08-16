@@ -5,6 +5,7 @@ import { BUILT_IN_PATH_ID, getBuiltInCard, getBuiltInDeck, isBuiltInDeckId, list
 import {
   collection,
   doc,
+  documentId,
   getDoc,
   getDocFromCache,
   getCountFromServer,
@@ -45,6 +46,8 @@ interface ProgressMemoryEntry {
 }
 
 const progressMemoryCache = new Map<string, ProgressMemoryEntry>();
+const authorNameCache = new Map<string, string>();
+const ownedDeckRequests = new Map<string, Promise<Deck[]>>();
 
 function cacheProgress(uid: string, items: CardProgress[], fetchedAt = Date.now()) {
   progressMemoryCache.set(uid, {
@@ -91,10 +94,21 @@ function initialProgress(cardId: string, deckId: string, now = Timestamp.now()):
 }
 
 export async function listOwnedDecks(uid: string) {
-  const { db } = requireFirebase();
-  const snapshot = await getDocs(query(collection(db, 'decks'), where('ownerId', '==', uid)));
-  const personal = snapshot.docs.map((item) => withId<Deck>(item)).filter((deck) => deck.pathId !== BUILT_IN_PATH_ID);
-  return [...listBuiltInDecks(uid), ...personal];
+  const pending = ownedDeckRequests.get(uid);
+  if (pending) return pending;
+
+  const request = (async () => {
+    const { db } = requireFirebase();
+    const snapshot = await getDocs(query(collection(db, 'decks'), where('ownerId', '==', uid)));
+    const personal = snapshot.docs.map((item) => withId<Deck>(item)).filter((deck) => deck.pathId !== BUILT_IN_PATH_ID);
+    return [...listBuiltInDecks(uid), ...personal];
+  })();
+  ownedDeckRequests.set(uid, request);
+  try {
+    return await request;
+  } finally {
+    if (ownedDeckRequests.get(uid) === request) ownedDeckRequests.delete(uid);
+  }
 }
 
 export async function listOwnedDecksFromCache(uid: string) {
@@ -109,14 +123,40 @@ export async function listOwnedDecksFromCache(uid: string) {
 export async function listPublicDecks(uid: string) {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'decks'), where('isPublic', '==', true), limit(30)));
-  return snapshot.docs.map((item) => withId<Deck>(item)).filter((deck) => deck.ownerId !== uid);
+  const decks = snapshot.docs.map((item) => withId<Deck>(item)).filter((deck) => deck.ownerId !== uid);
+  const missingOwnerIds = [...new Set(decks.map((deck) => deck.ownerId))]
+    .filter((ownerId) => !authorNameCache.has(ownerId));
+  for (let index = 0; index < missingOwnerIds.length; index += 10) {
+    const ownerIds = missingOwnerIds.slice(index, index + 10);
+    const authors = await getDocs(query(
+      collection(db, 'leaderboard'),
+      where(documentId(), 'in', ownerIds),
+    ));
+    authors.docs.forEach((item) => {
+      authorNameCache.set(item.id, String(item.data().displayName || 'Người học'));
+    });
+    ownerIds.forEach((ownerId) => {
+      if (!authorNameCache.has(ownerId)) authorNameCache.set(ownerId, 'Người học');
+    });
+  }
+  return decks.map((deck) => ({
+    ...deck,
+    authorName: authorNameCache.get(deck.ownerId) ?? 'Người học',
+  }));
 }
 
 export async function getDeck(deckId: string) {
   const builtIn = getBuiltInDeck(deckId); if (builtIn) return builtIn;
   const { db } = requireFirebase();
   const snapshot = await getDoc(doc(db, 'decks', deckId));
-  return snapshot.exists() ? withId<Deck>(snapshot) : null;
+  if (!snapshot.exists()) return null;
+  const deck = withId<Deck>(snapshot);
+  if (!deck.isPublic) return deck;
+  if (!authorNameCache.has(deck.ownerId)) {
+    const author = await getDoc(doc(db, 'leaderboard', deck.ownerId));
+    authorNameCache.set(deck.ownerId, String(author.data()?.displayName || 'Người học'));
+  }
+  return { ...deck, authorName: authorNameCache.get(deck.ownerId) };
 }
 
 export async function getDeckFromCache(deckId: string) {
@@ -124,7 +164,11 @@ export async function getDeckFromCache(deckId: string) {
   const { db } = requireFirebase();
   try {
     const snapshot = await getDocFromCache(doc(db, 'decks', deckId));
-    return snapshot.exists() ? withId<Deck>(snapshot) : null;
+    if (!snapshot.exists()) return null;
+    const deck = withId<Deck>(snapshot);
+    return deck.isPublic && authorNameCache.has(deck.ownerId)
+      ? { ...deck, authorName: authorNameCache.get(deck.ownerId) }
+      : deck;
   } catch {
     return null;
   }
@@ -314,10 +358,19 @@ export async function listDeckStates(uid: string) {
       initializedCardCount: Number(data.initializedCardCount ?? 0),
       reviewedCardCount: Number(data.reviewedCardCount ?? 0),
       masteredCount: Number(data.masteredCount ?? 0),
+      goldCompletedAt: data.goldCompletedAt ?? null,
       lastStudiedCardId: data.lastStudiedCardId ?? null,
       lastStudiedAt: data.lastStudiedAt ?? null,
     } satisfies DeckState];
   })) as Record<string, DeckState>;
+}
+
+export async function markDeckGold(uid: string, deckId: string) {
+  const { db } = requireFirebase();
+  await setDoc(doc(db, 'users', uid, 'deckStates', deckId), {
+    goldCompletedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
 }
 
 export async function ensureDeckProgress(
@@ -577,7 +630,7 @@ export async function listLeaderboard(): Promise<LeaderboardEntry[]> {
   const snapshot = await getDocs(query(collection(db, 'leaderboard'), orderBy('xp', 'desc'), limit(20)));
   return snapshot.docs.map((item) => {
     const data = item.data();
-    return { uid: item.id, displayName: String(data.displayName || 'Người học'), xp: Number(data.xp ?? 0), reviewedCount: Number(data.reviewedCount ?? 0) };
+    return { uid: item.id, displayName: String(data.displayName || 'Người học'), avatarId: String(data.avatarId || 'avt1'), xp: Number(data.xp ?? 0), reviewedCount: Number(data.reviewedCount ?? 0) };
   });
 }
 

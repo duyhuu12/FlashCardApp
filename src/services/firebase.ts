@@ -6,6 +6,7 @@ import { getAuth, initializeAuth, type Auth } from 'firebase/auth';
 // @ts-expect-error React Native conditional export
 import { getReactNativePersistence } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { Platform } from 'react-native';
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -25,13 +26,17 @@ let firestoreInstance: Firestore | null = null;
 
 if (isFirebaseConfigured) {
   const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-  try {
-    authInstance = initializeAuth(app, {
-      persistence: getReactNativePersistence(AsyncStorage),
-    });
-  } catch {
-    // Fast refresh may initialize Auth before this module is evaluated again.
+  if (Platform.OS === 'web') {
     authInstance = getAuth(app);
+  } else {
+    try {
+      authInstance = initializeAuth(app, {
+        persistence: getReactNativePersistence(AsyncStorage),
+      });
+    } catch {
+      // Fast refresh may initialize Auth before this module is evaluated again.
+      authInstance = getAuth(app);
+    }
   }
   firestoreInstance = getFirestore(app);
 }

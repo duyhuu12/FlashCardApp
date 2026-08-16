@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Penguinlingo",
+    "name": "DolphinLingo",
     "slug": "penguinlingo",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -13,13 +13,14 @@
       "bundleIdentifier": "com.penguinlingo.flashcardapp"
     },
     "android": {
+      "package": "com.penguinlingo.flashcardapp",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#63DDE0",
         "foregroundImage": "./assets/images/dolphin-app-icon-foreground.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.lexiloop.flashcardapp"
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
@@ -28,6 +29,8 @@
     "plugins": [
       "expo-router",
       "expo-notifications",
+      "expo-system-ui",
+      "@react-native-google-signin/google-signin",
       [
         "expo-splash-screen",
         {
@@ -39,10 +42,24 @@
             "backgroundColor": "#08253D"
           }
         }
-      ]
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9247fb65-9625-4414-8964-ec4ab60931b9"
+      }
     }
   }
 }

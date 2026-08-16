@@ -3,6 +3,7 @@ import { AppScreen } from '@/src/components/AppScreen';
 import { EmptyView, ErrorView, LoadingView } from '@/src/components/StateView';
 import { useAuth } from '@/src/context/AuthContext';
 import {
+  cloneDeck,
   getDeck,
   getDeckFromCache,
   listCardsPage,
@@ -12,7 +13,7 @@ import {
   type CardPageCursor,
 } from '@/src/services/deckService';
 import { speakEnglish, stopSpeaking } from '@/src/services/speechService';
-import { colors, resolveDeckColor, shadows } from '@/src/theme/colors';
+import { resolveDeckColor, useAppTheme, useThemedStyles, type AppColors, type AppShadows } from '@/src/theme/colors';
 import type { Deck, Flashcard } from '@/src/types/models';
 import { friendlyError } from '@/src/utils/errors';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,8 @@ import { useCallback, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 export default function DeckDetailScreen() {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const router = useRouter();
@@ -30,6 +33,7 @@ export default function DeckDetailScreen() {
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [error, setError] = useState('');
   const hasLoaded = useRef(false);
 
@@ -101,6 +105,26 @@ export default function DeckDetailScreen() {
     ]);
   }
 
+  async function copyToLibrary() {
+    if (!user || !deck || copying) return;
+    setCopying(true);
+    try {
+      const copiedDeckId = await cloneDeck(user.uid, deck);
+      Alert.alert(
+        'Đã sao chép bộ từ',
+        'Bộ từ đã được thêm vào thư viện của bạn.',
+        [
+          { text: 'Ở lại', style: 'cancel' },
+          { text: 'Xem bản sao', onPress: () => router.replace('/deck/' + copiedDeckId) },
+        ],
+      );
+    } catch (e) {
+      Alert.alert('Không thể sao chép', friendlyError(e));
+    } finally {
+      setCopying(false);
+    }
+  }
+
   function confirmDeleteCard(card: Flashcard) {
     if (!user) return;
     Alert.alert('Xóa thẻ?', `Bạn có chắc muốn xóa “${card.term}”?`, [
@@ -125,7 +149,7 @@ export default function DeckDetailScreen() {
   const editable = owner && !deck.pathId;
   return (
     <AppScreen>
-      <View style={[styles.banner, { backgroundColor: resolveDeckColor(deck.color) }]}>
+      <View style={[styles.banner, { backgroundColor: resolveDeckColor(deck.color, colors.primary) }]}>
         <View style={styles.bannerTop}>
           <Ionicons name="layers" size={34} color="#fff" />
           <View style={styles.actions}>
@@ -134,12 +158,14 @@ export default function DeckDetailScreen() {
           </View>
         </View>
         <Text style={styles.bannerTitle}>{deck.title}</Text>
+        {deck.authorName ? <View style={styles.authorRow}><Ionicons name="person-circle-outline" size={18} color="#fff" /><Text style={styles.authorText}>Tác giả: {deck.authorName}</Text></View> : null}
         <Text style={styles.bannerDescription}>{deck.description || 'Bộ từ vựng của bạn'}</Text>
         <Text style={styles.bannerMeta}>{deck.cardCount} thẻ · {deck.sourceLanguage} → {deck.targetLanguage}</Text>
       </View>
       <View style={styles.buttons}>
         <AppButton title="Ôn tập ngay" onPress={() => router.push(`/review/${id}`)} disabled={deck.cardCount === 0} style={{ flex: 1 }} />
         {editable ? <AppButton title="+ Thêm thẻ" variant="secondary" onPress={() => router.push({ pathname: '/card/form', params: { deckId: id } })} style={{ flex: 1 }} /> : null}
+        {!owner && deck.isPublic ? <AppButton title="Sao chép vào thư viện" variant="secondary" onPress={copyToLibrary} loading={copying} style={{ flex: 1 }} /> : null}
       </View>
       <View style={styles.sectionRow}>
         <Text style={styles.sectionTitle}>Danh sách thẻ</Text>
@@ -176,11 +202,13 @@ export default function DeckDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors, shadows: AppShadows) => StyleSheet.create({
   banner: { borderRadius: 24, padding: 20, gap: 8, ...shadows.card },
   bannerTop: { flexDirection: 'row', justifyContent: 'space-between' },
   actions: { flexDirection: 'row', gap: 18 },
   bannerTitle: { color: '#fff', fontSize: 25, fontWeight: '900' },
+  authorRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  authorText: { color: '#fff', fontSize: 13, fontWeight: '800' },
   bannerDescription: { color: '#DDF9FA', lineHeight: 20 },
   bannerMeta: { color: '#fff', fontWeight: '700', marginTop: 4 },
   buttons: { flexDirection: 'row', gap: 10 },

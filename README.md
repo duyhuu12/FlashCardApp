@@ -1,6 +1,6 @@
-# LexiLoop – Ứng dụng học từ vựng bằng flashcard
+# DolphinLingo – Ứng dụng học từ vựng bằng flashcard
 
-LexiLoop là ứng dụng React Native dùng flashcard và lặp lại ngắt quãng. Người dùng có thể quản lý bộ từ, ôn bằng thẻ lật/vuốt, theo dõi tiến độ, chia sẻ bộ từ và đặt lịch nhắc học hằng ngày.
+DolphinLingo là ứng dụng React Native dùng flashcard và lặp lại ngắt quãng. Người dùng có thể quản lý bộ từ, ôn bằng thẻ lật/vuốt, theo dõi tiến độ, chia sẻ bộ từ và đặt lịch nhắc học hằng ngày.
 
 ## Công nghệ
 

@@ -10,7 +10,7 @@ const licenseUrl =
   "https://raw.githubusercontent.com/thichhoc-org/thichhoc-dict/main/dict-en-vi/LICENSE-DATA";
 const headers = {
   Accept: "application/vnd.github+json",
-  "User-Agent": "PenguinLingo-dataset-builder",
+  "User-Agent": "DolphinLingo-dataset-builder",
 };
 
 async function fetchText(url) {

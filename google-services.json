@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "445960228407",
+    "project_id": "duyhuu-d7aee",
+    "storage_bucket": "duyhuu-d7aee.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:445960228407:android:4f3c58ca17933a66cdb9b2",
+        "android_client_info": {
+          "package_name": "com.penguinlingo.flashcardapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "445960228407-6hu5t1tev97f1cd00k9jtsvpt6054mu4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.penguinlingo.flashcardapp",
+            "certificate_hash": "948fe1ba4af6af0a045e9460409522fe1e84634f"
+          }
+        },
+        {
+          "client_id": "445960228407-7rpnp2glf04imc4rju381fa7ijmd6t3h.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDX9s6UTRsGQp3PNI3n4cZ7Sibsesv_PlQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "445960228407-7rpnp2glf04imc4rju381fa7ijmd6t3h.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

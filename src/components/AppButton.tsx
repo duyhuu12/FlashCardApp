@@ -1,4 +1,4 @@
-import { colors } from '@/src/theme/colors';
+import { useAppTheme } from '@/src/theme/colors';
 import { ActivityIndicator, Pressable, StyleSheet, Text, type ViewStyle } from 'react-native';
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
 }
 
 export function AppButton({ title, onPress, variant = 'primary', loading, disabled, style }: Props) {
+  const { colors } = useAppTheme();
   const palette = {
     primary: { background: colors.primary, text: '#FFFFFF', border: colors.primary },
     secondary: { background: colors.primarySoft, text: colors.primaryDark, border: colors.primarySoft },

@@ -1,7 +1,7 @@
-import { colors } from '@/src/theme/colors';
+import { useThemedStyles, type AppColors } from '@/src/theme/colors';
 import type { PropsWithChildren, ReactNode, Ref } from 'react';
 import { ScrollView, StyleSheet, View, type ScrollViewProps, type ViewStyle } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
 interface Props extends PropsWithChildren {
   scroll?: boolean;
@@ -10,11 +10,13 @@ interface Props extends PropsWithChildren {
   scrollProps?: Omit<ScrollViewProps, 'contentContainerStyle' | 'refreshControl'>;
   scrollRef?: Ref<ScrollView>;
   floatingContent?: ReactNode;
+  safeAreaEdges?: Edge[];
 }
 
-export function AppScreen({ children, scroll = true, contentStyle, refreshControl, scrollProps, scrollRef, floatingContent }: Props) {
+export function AppScreen({ children, scroll = true, contentStyle, refreshControl, scrollProps, scrollRef, floatingContent, safeAreaEdges = ['top', 'left', 'right'] }: Props) {
+  const styles = useThemedStyles(createStyles);
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.safe} edges={safeAreaEdges}>
       {scroll ? (
         <ScrollView
           {...scrollProps}
@@ -32,7 +34,7 @@ export function AppScreen({ children, scroll = true, contentStyle, refreshContro
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   content: { padding: 20, gap: 16 },

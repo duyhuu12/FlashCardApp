@@ -4,13 +4,14 @@ import { AppScreen } from '@/src/components/AppScreen';
 import { LoadingView } from '@/src/components/StateView';
 import { useAuth } from '@/src/context/AuthContext';
 import { createCard, getCard, hasDuplicateCard, updateCard } from '@/src/services/deckService';
-import { colors } from '@/src/theme/colors';
+import { useThemedStyles, type AppColors } from '@/src/theme/colors';
 import { friendlyError } from '@/src/utils/errors';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text } from 'react-native';
 
 export default function CardFormScreen() {
+  const styles = useThemedStyles(createStyles);
   const { deckId, cardId } = useLocalSearchParams<{ deckId: string; cardId?: string }>();
   const { user } = useAuth(); const router = useRouter();
   const [term, setTerm] = useState(''); const [meaning, setMeaning] = useState('');
@@ -35,4 +36,4 @@ export default function CardFormScreen() {
   if (loading) return <AppScreen><LoadingView /></AppScreen>;
   return <AppScreen contentStyle={styles.content}><Text style={styles.title}>{cardId ? 'Sửa thẻ từ' : 'Thêm thẻ từ'}</Text><Text style={styles.subtitle}>Từ và nghĩa là hai trường bắt buộc.</Text><AppInput label="Từ vựng *" value={term} onChangeText={setTerm} error={errors.term} autoCapitalize="none" /><AppInput label="Nghĩa *" value={meaning} onChangeText={setMeaning} error={errors.meaning} /><AppInput label="Phiên âm" value={pronunciation} onChangeText={setPronunciation} /><AppInput label="Ví dụ" value={example} onChangeText={setExample} multiline /><AppInput label="URL ảnh minh họa" value={imageUrl} onChangeText={setImageUrl} autoCapitalize="none" keyboardType="url" /><AppButton title={cardId ? 'Lưu thay đổi' : 'Thêm thẻ'} onPress={submit} loading={saving} /></AppScreen>;
 }
-const styles = StyleSheet.create({ content: { width: '100%', maxWidth: 620, alignSelf: 'center' }, title: { color: colors.text, fontSize: 25, fontWeight: '900' }, subtitle: { color: colors.muted } });
+const createStyles = (colors: AppColors) => StyleSheet.create({ content: { width: '100%', maxWidth: 620, alignSelf: 'center' }, title: { color: colors.text, fontSize: 25, fontWeight: '900' }, subtitle: { color: colors.muted } });
