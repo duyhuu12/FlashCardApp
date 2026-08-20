@@ -20,9 +20,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
+  BackHandler,
   Image,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -77,11 +80,39 @@ export default function HomeScreen() {
   const [stickyCategoryOrder, setStickyCategoryOrder] = useState<number | null>(
     null,
   );
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const hasLoaded = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
   const roadTopRef = useRef(0);
   const sectionOffsetsRef = useRef<Record<number, number>>({});
   const activePulse = useRef(new Animated.Value(0)).current;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android") return undefined;
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        () => {
+          Alert.alert(
+            "Thoát ứng dụng?",
+            "Bạn có chắc chắn muốn thoát DolphinLingo không?",
+            [
+              { text: "Hủy", style: "cancel" },
+              {
+                text: "Thoát",
+                style: "destructive",
+                onPress: () => BackHandler.exitApp(),
+              },
+            ],
+          );
+          return true;
+        },
+      );
+
+      return () => subscription.remove();
+    }, []),
+  );
 
   useEffect(() => {
     const animation = Animated.loop(
@@ -228,13 +259,38 @@ export default function HomeScreen() {
     return previous.cardCount > 0 && reviewed / previous.cardCount >= 0.8;
   }
 
+  const renderTopBar = () => (
+    <View style={styles.topBar}>
+      <View style={styles.languageBadge}>
+        <Text style={{ fontSize: 20 }}>🇺🇸</Text>
+        <Text style={styles.languageText}>ANH–VIỆT</Text>
+      </View>
+      <View style={styles.metric}>
+        <Ionicons name="flame" size={23} color="#FF9600" />
+        <Text style={styles.metricValue}>{stats.streak ?? 0}</Text>
+      </View>
+      <View style={styles.metric}>
+        <Ionicons name="diamond" size={20} color="#1CB0F6" />
+        <Text style={[styles.metricValue, styles.xpValue]}>
+          {stats.xp ?? 0}
+        </Text>
+      </View>
+      <View style={styles.avatar}>
+        <Image
+          source={getAvatarSource(profile?.avatarId)}
+          resizeMode="cover"
+          style={styles.avatarImage}
+        />
+      </View>
+    </View>
+  );
+
   const activeDeck =
     pathDecks.find((deck) => {
       const reviewed = deckStates[deck.id]?.reviewedCardCount ?? 0;
       const completion = deck.cardCount ? reviewed / deck.cardCount : 0;
       return deck.cardCount > 0 && isUnlocked(deck) && completion < 0.8;
-    }) ??
-    pathDecks[0];
+    }) ?? pathDecks[0];
   const selectedDeckState = selectedDeck
     ? deckStates[selectedDeck.id]
     : undefined;
@@ -253,48 +309,84 @@ export default function HomeScreen() {
 
   return (
     <AppScreen
+      safeAreaEdges={["left", "right"]}
       contentStyle={styles.screen}
       scrollRef={scrollRef}
       scrollProps={{
-        onScroll: (event) =>
-          updateStickySection(event.nativeEvent.contentOffset.y),
+        onScroll: (event) => {
+          const scrollY = event.nativeEvent.contentOffset.y;
+          updateStickySection(scrollY);
+          setShowScrollTop(scrollY > 280);
+        },
         scrollEventThrottle: 16,
       }}
       floatingContent={
-        stickySection ? (
-          <View
-            pointerEvents="box-none"
-            style={[styles.stickySectionWrapper, { top: insets.top + 8 }]}
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Chọn phần học, phần ${stickySection.categoryOrder} ${stickySection.categoryTitle}`}
-              onPress={() => setSectionPickerVisible(true)}
+        <>
+          <View pointerEvents="box-none" style={styles.fixedHeaderLayer}>
+            <View
               style={[
-                styles.stickySectionBanner,
-                {
-                  backgroundColor: stickyPalette.main,
-                  borderBottomColor: stickyPalette.dark,
-                },
+                styles.fixedTopBar,
+                { paddingTop: insets.top, backgroundColor: colors.background },
               ]}
             >
-              <View style={styles.stickySectionIcon}>
-                <Ionicons name="flag" size={21} color="#fff" />
+              {renderTopBar()}
+            </View>
+            {stickySection ? (
+              <View
+                pointerEvents="box-none"
+                style={[
+                  styles.stickySectionWrapper,
+                  {
+                    top: insets.top + 56,
+                  },
+                ]}
+              >
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Chọn phần học, phần ${stickySection.categoryOrder} ${stickySection.categoryTitle}`}
+                  onPress={() => setSectionPickerVisible(true)}
+                  style={[
+                    styles.stickySectionBanner,
+                    {
+                      backgroundColor: stickyPalette.main,
+                      borderBottomColor: stickyPalette.dark,
+                    },
+                  ]}
+                >
+                  <View style={styles.sectionBannerCopy}>
+                    <Text style={styles.sectionOverline}>
+                      PHẦN {stickySection.categoryOrder}
+                    </Text>
+                    <Text style={styles.sectionTitle} numberOfLines={1}>
+                      {stickySection.categoryTitle}
+                    </Text>
+                  </View>
+                  <View style={styles.sectionDivider} />
+                  <View style={styles.sectionGuideIcon}>
+                    <Ionicons name="journal-outline" size={26} color="#fff" />
+                  </View>
+                </Pressable>
               </View>
-              <View style={styles.sectionBannerCopy}>
-                <Text style={styles.sectionOverline}>
-                  PHẦN {stickySection.categoryOrder}
-                </Text>
-                <Text style={styles.sectionTitle}>
-                  {stickySection.categoryTitle}
-                </Text>
-              </View>
-              <View style={styles.sectionListButton}>
-                <Ionicons name="list" size={29} color="#fff" />
+            ) : null}
+          </View>
+          {showScrollTop ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cuộn lên đầu trang"
+              onPress={() => {
+                scrollRef.current?.scrollTo({ y: 0, animated: true });
+              }}
+              style={({ pressed }) => [
+                styles.scrollTopButtonShadow,
+                pressed && styles.stopPressed,
+              ]}
+            >
+              <View style={styles.scrollTopButtonInner}>
+                <Ionicons name="arrow-up" size={24} color="#fff" />
               </View>
             </Pressable>
-          </View>
-        ) : null
+          ) : null}
+        </>
       }
       refreshControl={
         <RefreshControl
@@ -307,31 +399,7 @@ export default function HomeScreen() {
         />
       }
     >
-      <View style={styles.topBar}>
-        <View style={styles.languageBadge}>
-          <Ionicons name="language" size={22} color={colors.primary} />
-          <Text style={styles.languageText}>ANH–VIỆT</Text>
-        </View>
-        <View style={styles.metric}>
-          <Ionicons name="flame" size={23} color={colors.warning} />
-          <Text style={styles.metricValue}>{stats.streak ?? 0}</Text>
-        </View>
-        <View style={styles.metric}>
-          <View>
-            <Text style={[styles.knLabel, { fontSize: 16 }]}>KN</Text>
-          </View>
-          <Text style={[styles.metricValue, styles.xpValue]}>
-            {stats.xp ?? 0}
-          </Text>
-        </View>
-        <View style={styles.avatar}>
-          <Image
-            source={getAvatarSource(profile?.avatarId)}
-            resizeMode="cover"
-            style={styles.avatarImage}
-          />
-        </View>
-      </View>
+      <View pointerEvents="none" style={{ height: insets.top + 56 }} />
 
       {loading ? (
         <LoadingView />
@@ -399,7 +467,12 @@ export default function HomeScreen() {
                 }
               >
                 {showSection ? (
-                  <View style={styles.sectionBanner}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Phần ${deck.categoryOrder}: ${deck.categoryTitle}`}
+                    onPress={() => setSectionPickerVisible(true)}
+                    style={styles.roadSectionHeader}
+                  >
                     <View style={styles.sectionBannerCopy}>
                       <Text
                         style={[
@@ -407,18 +480,26 @@ export default function HomeScreen() {
                           { color: sectionPalette.main },
                         ]}
                       >
-                        PHẦN {deck.categoryOrder}
+                        PHẦN {deck.categoryOrder}, CỬA {deck.pathOrder ?? 1}
                       </Text>
                       <Text
                         style={[
                           styles.roadSectionTitle,
-                          { color: sectionPalette.main },
+                          { color: colors.text },
                         ]}
+                        numberOfLines={2}
                       >
                         {deck.categoryTitle}
                       </Text>
                     </View>
-                  </View>
+                    <View style={styles.roadSectionGuideIcon}>
+                      <Ionicons
+                        name="journal-outline"
+                        size={25}
+                        color={sectionPalette.main}
+                      />
+                    </View>
+                  </Pressable>
                 ) : null}
                 <View style={styles.pathNodeRow}>
                   <Pressable
@@ -713,6 +794,8 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
       paddingBottom: 36,
     },
     topBar: {
+      width: "100%",
+      maxWidth: 620,
       minHeight: 48,
       flexDirection: "row",
       alignItems: "center",
@@ -726,7 +809,7 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
       paddingHorizontal: 11,
       paddingVertical: 9,
       borderRadius: 14,
-      backgroundColor: colors.primarySoft,
+      // backgroundColor: colors.primarySoft,
     },
     languageText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
     metric: { flexDirection: "row", alignItems: "center", gap: 4 },
@@ -752,134 +835,61 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
       ...shadows.card,
     },
     avatarImage: { width: "100%", height: "100%" },
-    courseBanner: {
-      minHeight: 116,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 13,
-      padding: 17,
-      borderRadius: 23,
-      borderBottomWidth: 6,
-      borderBottomColor: colors.primaryDark,
-      backgroundColor: colors.primary,
-      ...shadows.card,
-    },
-    courseBannerIcon: {
-      width: 52,
-      height: 52,
-      borderRadius: 17,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: "rgba(255,255,255,0.17)",
-    },
-    courseBannerCopy: { flex: 1 },
-    courseOverline: {
-      color: "#C9F5F7",
-      fontSize: 10,
-      fontWeight: "900",
-      letterSpacing: 1,
-    },
-    courseTitle: {
-      color: "#fff",
-      fontSize: 18,
-      fontWeight: "900",
-      lineHeight: 24,
-      marginTop: 3,
-    },
-    courseMeta: { color: "#DDF9FA", fontSize: 11, marginTop: 5 },
-    coursePercent: {
-      minWidth: 49,
-      height: 49,
-      borderRadius: 25,
-      alignItems: "center",
-      justifyContent: "center",
-      borderWidth: 3,
-      borderColor: "rgba(255,255,255,0.65)",
-    },
-    coursePercentText: { color: "#fff", fontSize: 12, fontWeight: "900" },
-    missionCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-      padding: 15,
-      borderRadius: 22,
-      backgroundColor: colors.primarySoft,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    missionIcon: {
-      width: 48,
-      height: 48,
-      borderRadius: 16,
-      backgroundColor: colors.surface,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    missionOverline: {
-      color: colors.primary,
-      fontSize: 10,
-      fontWeight: "900",
-      letterSpacing: 1,
-    },
-    missionTitle: {
-      color: colors.text,
-      fontSize: 16,
-      fontWeight: "900",
-      marginTop: 3,
-    },
-    missionMeta: { color: colors.muted, fontSize: 11, marginTop: 3 },
-    missionTrack: {
-      height: 6,
-      borderRadius: 8,
-      backgroundColor: colors.border,
-      overflow: "hidden",
-      marginTop: 9,
-    },
-    missionFill: { height: "100%", backgroundColor: colors.primary },
-    goButton: {
-      minWidth: 60,
-      minHeight: 48,
-      borderRadius: 16,
-      backgroundColor: colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
-      ...shadows.card,
-    },
-    goText: { color: "#fff", fontSize: 17, fontWeight: "900" },
-    journeyHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginTop: 4,
-    },
-    journeyTitle: { color: colors.text, fontSize: 21, fontWeight: "900" },
-    journeyHint: { color: colors.muted, marginTop: 4 },
-    road: { position: "relative", paddingTop: 5, paddingBottom: 12 },
-    roadLine: {
+    fixedHeaderLayer: {
       position: "absolute",
-      top: 82,
-      bottom: 62,
-      left: "50%",
-      borderLeftWidth: 6,
-      borderStyle: "dashed",
-      borderColor: colors.border,
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 40,
+      elevation: 14,
     },
-    roadStep: { width: "100%" },
-    sectionBanner: {
-      zIndex: 3,
-      minHeight: 64,
-      justifyContent: "center",
-      paddingHorizontal: 8,
-      marginTop: 18,
-      marginBottom: 10,
+    fixedTopBar: {
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 4,
     },
-    sectionListButton: {
+    roadSectionHeader: {
+      width: "100%",
+      maxWidth: 620,
+      minHeight: 68,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      marginTop: 26,
+      marginBottom: 12,
+      alignSelf: "center",
+      backgroundColor: "transparent",
+    },
+    roadSectionOverline: {
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 1.2,
+      textTransform: "uppercase",
+    },
+    roadSectionTitle: {
+      fontSize: 22,
+      fontWeight: "900",
+      lineHeight: 28,
+      marginTop: 2,
+    },
+    roadSectionGuideIcon: {
       width: 44,
       height: 44,
       borderRadius: 14,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: "rgba(255,255,255,0.12)",
+      backgroundColor: colors.surface,
+      borderWidth: 1.5,
+      borderColor: colors.border,
     },
     stickySectionWrapper: {
       position: "absolute",
@@ -888,57 +898,77 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
       zIndex: 30,
       elevation: 12,
       alignItems: "center",
-      paddingHorizontal: 20,
-      paddingTop: 4,
+      paddingHorizontal: 16,
     },
     stickySectionBanner: {
       width: "100%",
       maxWidth: 620,
-      minHeight: 70,
+      minHeight: 76,
       flexDirection: "row",
       alignItems: "center",
-      gap: 12,
-      paddingHorizontal: 14,
+      gap: 14,
+      paddingHorizontal: 20,
+      paddingVertical: 14,
       borderRadius: 20,
-      borderBottomWidth: 5,
-      borderBottomColor: colors.primaryDark,
-      backgroundColor: colors.primary,
-      ...shadows.card,
+      borderBottomWidth: 6,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.18,
+      shadowRadius: 6,
+      elevation: 9,
     },
-    stickySectionIcon: {
-      width: 43,
-      height: 43,
+    sectionBannerCopy: { flex: 1 },
+    sectionOverline: {
+      color: "rgba(255, 255, 255, 0.85)",
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 1.1,
+      textTransform: "uppercase",
+    },
+    sectionTitle: {
+      color: "#FFFFFF",
+      fontSize: 19,
+      fontWeight: "900",
+      lineHeight: 25,
+      marginTop: 2,
+    },
+    sectionDivider: {
+      width: 1,
+      height: 40,
+      backgroundColor: "rgba(255, 255, 255, 0.28)",
+      marginHorizontal: 4,
+    },
+    sectionGuideIcon: {
+      width: 44,
+      height: 44,
       borderRadius: 14,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: "rgba(255,255,255,0.16)",
+      backgroundColor: "rgba(255, 255, 255, 0.16)",
     },
-    sectionBannerCopy: { flex: 1 },
-    roadSectionOverline: {
-      color: colors.primary,
-      fontSize: 11,
-      fontWeight: "900",
-      letterSpacing: 1.2,
-      textAlign: "center",
+    scrollTopButtonShadow: {
+      position: "absolute",
+      bottom: 24,
+      right: 20,
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      backgroundColor: colors.primaryDark,
+      zIndex: 60,
+      elevation: 8,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 5,
+      overflow: "hidden",
     },
-    roadSectionTitle: {
-      color: colors.text,
-      fontSize: 22,
-      fontWeight: "900",
-      marginTop: 4,
-      textAlign: "center",
-    },
-    sectionOverline: {
-      color: "#C9F5F7",
-      fontSize: 10,
-      fontWeight: "900",
-      letterSpacing: 1,
-    },
-    sectionTitle: {
-      color: "#fff",
-      fontSize: 18,
-      fontWeight: "900",
-      marginTop: 2,
+    scrollTopButtonInner: {
+      width: 50,
+      height: 45,
+      borderRadius: 25,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
     },
     pathNodeRow: { height: 138, position: "relative", alignItems: "center" },
     pathNodePressable: {

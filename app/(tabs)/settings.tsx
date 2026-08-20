@@ -333,206 +333,246 @@ export default function SettingsScreen() {
             ]}
           >
             <Pressable style={styles.drawerContent} onPress={() => undefined}>
-            <View style={styles.drawerHeader}>
-              <Image
-                source={getAvatarSource(profile?.avatarId)}
-                resizeMode="cover"
-                style={styles.drawerAvatar}
-              />
-              <View style={styles.drawerProfileCopy}>
-                <Text numberOfLines={1} style={styles.drawerName}>
-                  {profile?.displayName || user?.displayName || "Người học"}
-                </Text>
-                <Text numberOfLines={1} style={styles.drawerEmail}>
-                  {user?.email}
-                </Text>
-              </View>
-              <Pressable
-                accessibilityLabel="Đóng cài đặt"
-                accessibilityRole="button"
-                hitSlop={8}
-                onPress={toggleSettingsPanel}
-                style={styles.drawerClose}
-              >
-                <Ionicons name="close" size={24} color={colors.text} />
-              </Pressable>
-            </View>
-            <Text style={styles.drawerTitle}>Cài đặt của bạn</Text>
-            <ScrollView
-              contentContainerStyle={styles.settingsPanel}
-              showsVerticalScrollIndicator={false}
-            >
-          <View style={styles.card}>
-            <View style={[styles.heading, styles.cardHeaderTint]}>
-              <View style={[styles.bell, styles.cardHeaderIcon]}>
-                <Ionicons
-                  name={isDark ? "moon" : "sunny"}
-                  size={24}
-                  color={colors.primary}
+              <View style={styles.drawerHeader}>
+                <Image
+                  source={getAvatarSource(profile?.avatarId)}
+                  resizeMode="cover"
+                  style={styles.drawerAvatar}
                 />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Chế độ tối</Text>
-                <Text style={styles.help}>{isDark ? "Đang bật" : "Đang tắt"}</Text>
-              </View>
-              <Switch
-                accessibilityLabel="Bật hoặc tắt chế độ tối"
-                value={isDark}
-                onValueChange={(value) =>
-                  setThemePreference(value ? "dark" : "light")
-                }
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor="#fff"
-              />
-            </View>
-            <Text style={styles.appearanceHint}>
-              Lần đầu ứng dụng sẽ tự dùng giao diện sáng hoặc tối theo cài đặt
-              điện thoại.
-            </Text>
-          </View>
-          <View style={styles.card}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ expanded: reminderMenuOpen }}
-              onPress={() => setReminderMenuOpen((current) => !current)}
-              style={[styles.heading, styles.cardHeaderTint]}
-            >
-              <View style={[styles.bell, styles.cardHeaderIcon]}>
-                <Ionicons
-                  name="notifications"
-                  size={24}
-                  color={colors.primary}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Nhắc ôn hằng ngày</Text>
-                <Text style={styles.help}>
-                  {enabled
-                    ? `Đang bật · ${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`
-                    : "Đang tắt"}
-                </Text>
-              </View>
-              <Ionicons
-                name={reminderMenuOpen ? "chevron-up" : "chevron-down"}
-                size={20}
-                color={colors.muted}
-              />
-            </Pressable>
-            {reminderMenuOpen ? (
-              <View style={styles.reminderContent}>
-                <View style={styles.reminderToggle}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.themeMenuText}>Bật nhắc ôn tập</Text>
-                    <Text style={styles.reminderHint}>
-                      Thông báo cục bộ trên thiết bị này.
-                    </Text>
-                  </View>
-                  <Switch
-                    value={enabled}
-                    onValueChange={setEnabled}
-                    trackColor={{ true: colors.primary }}
-                  />
-                </View>
-                {Platform.OS === "web" ? (
-                  <Text style={styles.warning}>
-                    Thông báo chỉ được cấu hình trên ứng dụng Android/iOS.
+                <View style={styles.drawerProfileCopy}>
+                  <Text numberOfLines={1} style={styles.drawerName}>
+                    {profile?.displayName || user?.displayName || "Người học"}
                   </Text>
-                ) : null}
-                <View style={styles.timeRow}>
-                  <View style={{ flex: 1 }}>
-                    <AppInput
-                      label="Giờ"
-                      value={hour}
-                      onChangeText={setHour}
-                      keyboardType="number-pad"
-                      maxLength={2}
-                      editable={enabled}
-                    />
-                  </View>
-                  <Text style={styles.colon}>:</Text>
-                  <View style={{ flex: 1 }}>
-                    <AppInput
-                      label="Phút"
-                      value={minute}
-                      onChangeText={setMinute}
-                      keyboardType="number-pad"
-                      maxLength={2}
-                      editable={enabled}
-                    />
-                  </View>
+                  <Text numberOfLines={1} style={styles.drawerEmail}>
+                    {user?.email}
+                  </Text>
                 </View>
-                <AppButton
-                  title="Lưu lịch nhắc"
-                  onPress={saveReminder}
-                  loading={saving}
-                  disabled={Platform.OS === "web"}
-                />
-              </View>
-            ) : null}
-          </View>
-          <View style={styles.card}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ expanded: infoMenuOpen }}
-              onPress={() => setInfoMenuOpen((current) => !current)}
-              style={[styles.heading, styles.cardHeaderTint]}
-            >
-              <View style={[styles.bell, styles.cardHeaderIcon]}>
-                <Ionicons
-                  name="information-circle"
-                  size={24}
-                  color={colors.primary}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Thông tin ứng dụng</Text>
-                <Text style={styles.help}>DolphinLingo · Phiên bản 1.0.0</Text>
-              </View>
-              <Ionicons
-                name={infoMenuOpen ? "chevron-up" : "chevron-down"}
-                size={20}
-                color={colors.muted}
-              />
-            </Pressable>
-            {infoMenuOpen ? (
-              <View style={styles.infoContent}>
-                <Text style={styles.help}>
-                  Học từ vựng bằng lặp lại ngắt quãng.
-                </Text>
-                <Text style={styles.credit}>
-                  Dữ liệu bộ 3.000 từ được chọn lọc từ thichhoc-dict, giấy phép
-                  CC BY-SA 4.0.
-                </Text>
                 <Pressable
-                  accessibilityRole="link"
-                  onPress={() =>
-                    Linking.openURL(
-                      "https://github.com/thichhoc-org/thichhoc-dict",
-                    )
-                  }
+                  accessibilityLabel="Đóng cài đặt"
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  onPress={toggleSettingsPanel}
+                  style={styles.drawerClose}
                 >
-                  <Text style={styles.link}>
-                    Xem nguồn và giấy phép dữ liệu
-                  </Text>
+                  <Ionicons name="close" size={24} color={colors.text} />
                 </Pressable>
               </View>
-            ) : null}
-          </View>
-          <AppButton
-            title="Đăng xuất"
-            variant="danger"
-            onPress={() =>
-              Alert.alert(
-                "Đăng xuất?",
-                "Bạn có thể đăng nhập lại bất cứ lúc nào.",
-                [
-                  { text: "Hủy", style: "cancel" },
-                  { text: "Đăng xuất", style: "destructive", onPress: signOut },
-                ],
-              )
-            }
-          />
-            </ScrollView>
+              <Text style={styles.drawerTitle}>Cài đặt của bạn</Text>
+              <ScrollView
+                contentContainerStyle={styles.settingsPanel}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.card}>
+                  <View style={[styles.heading, styles.cardHeaderTint]}>
+                    <View style={[styles.bell, styles.cardHeaderIcon]}>
+                      <Ionicons
+                        name={isDark ? "moon" : "sunny"}
+                        size={24}
+                        color={colors.primary}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cardTitle}>Chế độ tối</Text>
+                      <Text style={styles.help}>
+                        {isDark ? "Đang bật" : "Đang tắt"}
+                      </Text>
+                    </View>
+                    <Switch
+                      accessibilityLabel="Bật hoặc tắt chế độ tối"
+                      value={isDark}
+                      onValueChange={(value) =>
+                        setThemePreference(value ? "dark" : "light")
+                      }
+                      trackColor={{
+                        false: colors.border,
+                        true: colors.primary,
+                      }}
+                      thumbColor="#fff"
+                    />
+                  </View>
+                </View>
+                <View style={styles.card}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: reminderMenuOpen }}
+                    onPress={() => setReminderMenuOpen((current) => !current)}
+                    style={[styles.heading, styles.cardHeaderTint]}
+                  >
+                    <View style={[styles.bell, styles.cardHeaderIcon]}>
+                      <Ionicons
+                        name="notifications"
+                        size={24}
+                        color={colors.primary}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cardTitle}>Nhắc ôn hằng ngày</Text>
+                      <Text style={styles.help}>
+                        {enabled
+                          ? `Đang bật · ${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`
+                          : "Đang tắt"}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={reminderMenuOpen ? "chevron-up" : "chevron-down"}
+                      size={20}
+                      color={colors.muted}
+                    />
+                  </Pressable>
+                  {reminderMenuOpen ? (
+                    <View style={styles.reminderContent}>
+                      <View style={styles.reminderToggle}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.themeMenuText}>
+                            Bật nhắc ôn tập
+                          </Text>
+                          <Text style={styles.reminderHint}>
+                            Thông báo cục bộ trên thiết bị này.
+                          </Text>
+                        </View>
+                        <Switch
+                          value={enabled}
+                          onValueChange={setEnabled}
+                          trackColor={{ true: colors.primary }}
+                        />
+                      </View>
+                      {Platform.OS === "web" ? (
+                        <Text style={styles.warning}>
+                          Thông báo chỉ được cấu hình trên ứng dụng Android/iOS.
+                        </Text>
+                      ) : null}
+                      <View style={styles.timeRow}>
+                        <View style={{ flex: 1 }}>
+                          <AppInput
+                            label="Giờ"
+                            value={hour}
+                            onChangeText={setHour}
+                            keyboardType="number-pad"
+                            maxLength={2}
+                            editable={enabled}
+                          />
+                        </View>
+                        <Text style={styles.colon}>:</Text>
+                        <View style={{ flex: 1 }}>
+                          <AppInput
+                            label="Phút"
+                            value={minute}
+                            onChangeText={setMinute}
+                            keyboardType="number-pad"
+                            maxLength={2}
+                            editable={enabled}
+                          />
+                        </View>
+                      </View>
+                      <AppButton
+                        title="Lưu lịch nhắc"
+                        onPress={saveReminder}
+                        loading={saving}
+                        disabled={Platform.OS === "web"}
+                      />
+                    </View>
+                  ) : null}
+                </View>
+                <View style={styles.card}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: infoMenuOpen }}
+                    onPress={() => setInfoMenuOpen((current) => !current)}
+                    style={[styles.heading, styles.cardHeaderTint]}
+                  >
+                    <View style={[styles.bell, styles.cardHeaderIcon]}>
+                      <Ionicons
+                        name="information-circle"
+                        size={24}
+                        color={colors.primary}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cardTitle}>Thông tin ứng dụng</Text>
+                      <Text style={styles.help}>
+                        DolphinLingo · Phiên bản 1.0.0
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={infoMenuOpen ? "chevron-up" : "chevron-down"}
+                      size={20}
+                      color={colors.muted}
+                    />
+                  </Pressable>
+                  {infoMenuOpen ? (
+                    <View style={styles.infoContent}>
+                      <Text style={styles.help}>
+                        Học từ vựng bằng lặp lại ngắt quãng.
+                      </Text>
+                      <Text style={styles.credit}>
+                        Dữ liệu bộ 3.000 từ được chọn lọc từ thichhoc-dict, giấy
+                        phép CC BY-SA 4.0.
+                      </Text>
+                      <Pressable
+                        accessibilityRole="link"
+                        onPress={() =>
+                          Linking.openURL(
+                            "https://github.com/thichhoc-org/thichhoc-dict",
+                          )
+                        }
+                      >
+                        <Text style={styles.link}>
+                          Xem nguồn và giấy phép dữ liệu
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={styles.settingSectionLabel}>Hỗ trợ</Text>
+                <View style={styles.staticSettingRow}>
+                  <View style={styles.staticSettingIcon}>
+                    <Ionicons name="star-outline" size={23} color={colors.primary} />
+                  </View>
+                  <Text style={styles.staticSettingTitle}>Đánh giá ứng dụng</Text>
+                  <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+                </View>
+                <View style={styles.staticSettingRow}>
+                  <View style={styles.staticSettingIcon}>
+                    <Ionicons name="headset-outline" size={23} color={colors.primary} />
+                  </View>
+                  <Text style={styles.staticSettingTitle}>Trung tâm CSKH</Text>
+                  <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+                </View>
+                <View style={styles.staticSettingRow}>
+                  <View style={styles.staticSettingIcon}>
+                    <Ionicons name="shield-checkmark-outline" size={23} color={colors.primary} />
+                  </View>
+                  <Text style={styles.staticSettingTitle}>Chính sách quyền riêng tư</Text>
+                  <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+                </View>
+                <View style={styles.staticSettingRow}>
+                  <View style={styles.staticSettingIcon}>
+                    <Ionicons name="code-slash-outline" size={23} color={colors.primary} />
+                  </View>
+                  <Text style={styles.staticSettingTitle}>Phiên bản ứng dụng</Text>
+                  <Text style={styles.versionText}>1.0.0</Text>
+                </View>
+              </ScrollView>
+              <View style={styles.drawerFooter}>
+                <AppButton
+                  title="Đăng xuất"
+                  variant="danger"
+                  onPress={() =>
+                    Alert.alert(
+                      "Đăng xuất?",
+                      "Bạn có thể đăng nhập lại bất cứ lúc nào.",
+                      [
+                        { text: "Hủy", style: "cancel" },
+                        {
+                          text: "Đăng xuất",
+                          style: "destructive",
+                          onPress: signOut,
+                        },
+                      ],
+                    )
+                  }
+                />
+              </View>
             </Pressable>
           </Animated.View>
         </Pressable>
@@ -811,25 +851,20 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
       marginBottom: 12,
       paddingHorizontal: 2,
     },
-    settingsPanel: { gap: 12, paddingBottom: 20 },
+    settingsPanel: { paddingBottom: 24 },
     card: {
-      backgroundColor: colors.surface,
-      borderRadius: 20,
-      padding: 17,
-      gap: 15,
-      ...shadows.card,
+      backgroundColor: "transparent",
     },
     heading: { flexDirection: "row", alignItems: "center", gap: 12 },
     cardHeaderTint: {
-      minHeight: 68,
-      paddingHorizontal: 12,
+      minHeight: 70,
+      paddingHorizontal: 2,
       paddingVertical: 10,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 16,
-      backgroundColor: colors.primarySoft,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      backgroundColor: "transparent",
     },
-    cardHeaderIcon: { backgroundColor: colors.surface },
+    cardHeaderIcon: { backgroundColor: colors.primarySoft },
     bell: {
       width: 44,
       height: 44,
@@ -841,12 +876,12 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
     cardTitle: { color: colors.text, fontSize: 17, fontWeight: "900" },
     help: { color: colors.muted, lineHeight: 20 },
     credit: { color: colors.muted, lineHeight: 20 },
-    infoContent: { gap: 10 },
+    infoContent: { gap: 10, paddingHorizontal: 4, paddingVertical: 14 },
     link: { color: colors.primary, fontWeight: "800" },
     timeRow: { flexDirection: "row", alignItems: "center", gap: 10 },
     colon: { color: colors.text, fontSize: 25, marginTop: 21 },
     warning: { color: colors.warning },
-    reminderContent: { gap: 13 },
+    reminderContent: { gap: 13, paddingHorizontal: 4, paddingVertical: 14 },
     reminderToggle: {
       minHeight: 58,
       flexDirection: "row",
@@ -870,6 +905,45 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
       color: colors.text,
       fontSize: 13,
       fontWeight: "800",
+    },
+    settingSectionLabel: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0.8,
+      marginTop: 22,
+      marginBottom: 6,
+      textTransform: "uppercase",
+    },
+    staticSettingRow: {
+      minHeight: 66,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingHorizontal: 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    staticSettingIcon: {
+      width: 44,
+      height: 44,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 14,
+      backgroundColor: colors.primarySoft,
+    },
+    staticSettingTitle: {
+      flex: 1,
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: "800",
+    },
+    versionText: { color: colors.muted, fontSize: 13, fontWeight: "800" },
+    drawerFooter: {
+      paddingTop: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      backgroundColor: colors.background,
     },
     modalBackdrop: {
       flex: 1,

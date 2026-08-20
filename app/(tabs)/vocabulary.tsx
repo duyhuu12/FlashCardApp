@@ -1,6 +1,7 @@
 import { AppButton } from "@/src/components/AppButton";
 import { AppScreen } from "@/src/components/AppScreen";
 import { useAuth } from "@/src/context/AuthContext";
+import type { BuiltInVocabularySearchResult } from "@/src/services/builtInVocabularyService";
 import {
   BUILT_IN_WORD_COUNT,
   isBuiltInDeckId,
@@ -12,6 +13,7 @@ import {
   listOwnedDecksFromCache,
   listProgress,
   listProgressFromCache,
+  setCardFavorite,
 } from "@/src/services/deckService";
 import { speakEnglish, stopSpeaking } from "@/src/services/speechService";
 import {
@@ -25,26 +27,21 @@ import type { CardProgress, Deck } from "@/src/types/models";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import {
-  useCallback,
-  useDeferredValue,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const SEARCH_RESULT_LIMIT = 50;
+const SEARCH_RESULT_PAGE_SIZE = 40;
 type VocabularySection = "vocabulary" | "practice";
+type VocabularySort = "smart" | "az" | "recent" | "hard" | "due";
 type LearningFilter =
   | "all"
   | "new"
@@ -66,6 +63,18 @@ const learningFilters: {
   { id: "due", label: "Cần ôn", icon: "alarm-outline" },
   { id: "hard", label: "Từ khó", icon: "alert-circle-outline" },
   { id: "favorite", label: "Yêu thích", icon: "heart-outline" },
+];
+
+const vocabularySorts: {
+  id: VocabularySort;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  { id: "smart", label: "Phù hợp nhất", icon: "sparkles-outline" },
+  { id: "az", label: "A–Z", icon: "text-outline" },
+  { id: "recent", label: "Học gần đây", icon: "time-outline" },
+  { id: "hard", label: "Khó nhất", icon: "fitness-outline" },
+  { id: "due", label: "Đến hạn trước", icon: "alarm-outline" },
 ];
 
 const reviewModes: {
@@ -139,6 +148,35 @@ function isProgressDue(progress?: CardProgress) {
   return nextReviewTime <= Date.now();
 }
 
+function progressDateMillis(value: CardProgress["nextReviewAt"] | undefined) {
+  if (!value) return 0;
+  return value instanceof Date ? value.getTime() : value.toMillis();
+}
+
+function createLocalProgress(
+  cardId: string,
+  deckId: string,
+  favorite: boolean,
+): CardProgress {
+  const now = new Date();
+  return {
+    cardId,
+    deckId,
+    repetitions: 0,
+    consecutiveCorrect: 0,
+    intervalMinutes: 0,
+    lastRating: null,
+    lastReviewedAt: null,
+    nextReviewAt: now,
+    mastered: false,
+    againCount: 0,
+    hardCount: 0,
+    easyCount: 0,
+    favorite,
+    updatedAt: now,
+  };
+}
+
 export default function VocabularyScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = useThemedStyles(createStyles);
@@ -147,9 +185,13 @@ export default function VocabularyScreen() {
   const insets = useSafeAreaInsets();
   const { filter: routeFilter } = useLocalSearchParams<{ filter?: string }>();
   const [section, setSection] = useState<VocabularySection>("vocabulary");
-  const [query, setQuery] = useState("");
-  const deferredQuery = useDeferredValue(query);
   const [learningFilter, setLearningFilter] = useState<LearningFilter>("all");
+  const [sortMode, setSortMode] = useState<VocabularySort>("smart");
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [visibleLimit, setVisibleLimit] = useState(SEARCH_RESULT_PAGE_SIZE);
+  const [savingFavoriteIds, setSavingFavoriteIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [progressItems, setProgressItems] = useState<CardProgress[]>([]);
   const [progressLoading, setProgressLoading] = useState(true);
   const [progressError, setProgressError] = useState("");
@@ -186,12 +228,64 @@ export default function VocabularyScreen() {
       null
     );
   }, [categories, progressItems]);
-  const normalizedQuery = deferredQuery.trim();
-  const searchPending = query !== deferredQuery;
+  const normalizedQuery = "";
   const progressByCardId = useMemo(
     () => new Map(progressItems.map((progress) => [progress.cardId, progress])),
     [progressItems],
   );
+  const allVocabulary = useMemo(
+    () => (user ? searchBuiltInVocabulary(user.uid, "") : []),
+    [user],
+  );
+  const todayWords = useMemo(() => {
+    const ranked = allVocabulary
+      .map((item) => {
+        const progress = progressByCardId.get(item.card.id);
+        if (isProgressDue(progress)) {
+          return {
+            item,
+            priority: 0,
+            order: progressDateMillis(progress?.nextReviewAt),
+            label: "Đến hạn",
+          };
+        }
+        if (
+          progress?.lastReviewedAt &&
+          (progress.lastRating === "hard" || progress.lastRating === "again")
+        ) {
+          return {
+            item,
+            priority: 1,
+            order: -progressDateMillis(progress.updatedAt),
+            label: "Từ khó",
+          };
+        }
+        if (!progress?.lastReviewedAt) {
+          return {
+            item,
+            priority: 2,
+            order: item.card.sourceOrder ?? Number.MAX_SAFE_INTEGER,
+            label: "Từ mới",
+          };
+        }
+        return null;
+      })
+      .filter(
+        (
+          entry,
+        ): entry is {
+          item: BuiltInVocabularySearchResult;
+          priority: number;
+          order: number;
+          label: string;
+        } => Boolean(entry),
+      )
+      .sort(
+        (left, right) =>
+          left.priority - right.priority || left.order - right.order,
+      );
+    return ranked.slice(0, 6);
+  }, [allVocabulary, progressByCardId]);
   const statusCounts = useMemo(() => {
     let learning = 0;
     let mastered = 0;
@@ -220,13 +314,11 @@ export default function VocabularyScreen() {
       favorite,
     };
   }, [progressItems]);
-  const showFilteredResults =
-    Boolean(normalizedQuery) || learningFilter !== "all";
+  const showFilteredResults = learningFilter !== "all";
   const searchResults = useMemo(() => {
     if (!user || !showFilteredResults) return [];
     const source = searchBuiltInVocabulary(user.uid, normalizedQuery);
-    if (learningFilter === "all") return source;
-    return source.filter(({ card }) => {
+    const filtered = source.filter(({ card }) => {
       const progress = progressByCardId.get(card.id);
       if (learningFilter === "new") return !progress?.lastReviewedAt;
       if (learningFilter === "mastered")
@@ -240,15 +332,54 @@ export default function VocabularyScreen() {
         (progress.lastRating === "hard" || progress.lastRating === "again"),
       );
     });
+    if (sortMode === "az") {
+      return [...filtered].sort((left, right) =>
+        left.card.term.localeCompare(right.card.term, "en"),
+      );
+    }
+    if (sortMode === "recent") {
+      return [...filtered].sort(
+        (left, right) =>
+          progressDateMillis(progressByCardId.get(right.card.id)?.updatedAt) -
+          progressDateMillis(progressByCardId.get(left.card.id)?.updatedAt),
+      );
+    }
+    if (sortMode === "hard") {
+      return [...filtered].sort((left, right) => {
+        const leftProgress = progressByCardId.get(left.card.id);
+        const rightProgress = progressByCardId.get(right.card.id);
+        const leftHard =
+          (leftProgress?.againCount ?? 0) + (leftProgress?.hardCount ?? 0);
+        const rightHard =
+          (rightProgress?.againCount ?? 0) + (rightProgress?.hardCount ?? 0);
+        return rightHard - leftHard;
+      });
+    }
+    if (sortMode === "due") {
+      return [...filtered].sort((left, right) => {
+        const leftTime = progressDateMillis(
+          progressByCardId.get(left.card.id)?.nextReviewAt,
+        );
+        const rightTime = progressDateMillis(
+          progressByCardId.get(right.card.id)?.nextReviewAt,
+        );
+        return (
+          (leftTime || Number.MAX_SAFE_INTEGER) -
+          (rightTime || Number.MAX_SAFE_INTEGER)
+        );
+      });
+    }
+    return filtered;
   }, [
     learningFilter,
     normalizedQuery,
     progressByCardId,
     showFilteredResults,
+    sortMode,
     user,
   ]);
   const visibleResults = showFilteredResults
-    ? searchResults.slice(0, SEARCH_RESULT_LIMIT)
+    ? searchResults.slice(0, visibleLimit)
     : [];
   const allCategoriesExpanded =
     categories.length > 0 && expandedCategoryIds.size === categories.length;
@@ -319,7 +450,6 @@ export default function VocabularyScreen() {
       if (!routeFilter || !learningFilterIds.has(routeFilter as LearningFilter))
         return;
       setSection("vocabulary");
-      setQuery("");
       setLearningFilter(routeFilter as LearningFilter);
     }, [routeFilter]),
   );
@@ -360,6 +490,10 @@ export default function VocabularyScreen() {
   }, [user]);
 
   useFocusEffect(loadPersonalDecks);
+  useEffect(() => {
+    setVisibleLimit(SEARCH_RESULT_PAGE_SIZE);
+    if (!showFilteredResults) setSortMenuOpen(false);
+  }, [learningFilter, normalizedQuery, showFilteredResults, sortMode]);
   useFocusEffect(
     useCallback(
       () => () => {
@@ -367,6 +501,63 @@ export default function VocabularyScreen() {
       },
       [],
     ),
+  );
+
+  const toggleFavorite = useCallback(
+    async (item: BuiltInVocabularySearchResult) => {
+      if (!user || savingFavoriteIds.has(item.card.id)) return;
+      const previous = progressByCardId.get(item.card.id);
+      const nextFavorite = !previous?.favorite;
+      setSavingFavoriteIds((current) => {
+        const next = new Set(current);
+        next.add(item.card.id);
+        return next;
+      });
+      setProgressItems((current) => {
+        const index = current.findIndex(
+          (progress) => progress.cardId === item.card.id,
+        );
+        if (index < 0) {
+          return [
+            ...current,
+            createLocalProgress(item.card.id, item.deck.id, nextFavorite),
+          ];
+        }
+        const next = [...current];
+        next[index] = { ...next[index], favorite: nextFavorite };
+        return next;
+      });
+      try {
+        await setCardFavorite(
+          user.uid,
+          item.deck.id,
+          item.card.id,
+          nextFavorite,
+        );
+      } catch {
+        setProgressItems((current) => {
+          if (!previous) {
+            return current.filter(
+              (progress) => progress.cardId !== item.card.id,
+            );
+          }
+          return current.map((progress) =>
+            progress.cardId === item.card.id ? previous : progress,
+          );
+        });
+        Alert.alert(
+          "Không thể lưu yêu thích",
+          "Hãy kiểm tra kết nối và thử lại.",
+        );
+      } finally {
+        setSavingFavoriteIds((current) => {
+          const next = new Set(current);
+          next.delete(item.card.id);
+          return next;
+        });
+      }
+    },
+    [progressByCardId, savingFavoriteIds, user],
   );
 
   const toggleCategory = (categoryId: string) => {
@@ -385,6 +576,66 @@ export default function VocabularyScreen() {
         : new Set(categories.map((category) => category.id)),
     );
   };
+
+  const renderLearningFilters = () => (
+    <View style={styles.filterSection}>
+      <View style={styles.filterHeader}>
+        <Text style={styles.filterLabel}>Trạng thái học</Text>
+        {progressLoading ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : null}
+      </View>
+      <ScrollView
+        contentContainerStyle={styles.filterContent}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+      >
+        {learningFilters.map((filter) => {
+          const selected = learningFilter === filter.id;
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              disabled={progressLoading && filter.id !== "all"}
+              key={filter.id}
+              onPress={() => setLearningFilter(filter.id)}
+              style={({ pressed }) => [
+                styles.filterChip,
+                selected && styles.filterChipSelected,
+                pressed && styles.resultRowPressed,
+              ]}
+            >
+              <Ionicons
+                name={filter.icon}
+                size={17}
+                color={selected ? "#fff" : colors.primary}
+              />
+              <Text
+                style={[
+                  styles.filterChipText,
+                  selected && styles.filterChipTextSelected,
+                ]}
+              >
+                {filter.label} ·{" "}
+                {statusCounts[filter.id].toLocaleString("vi-VN")}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+      {progressError ? (
+        <View style={styles.filterError}>
+          <Text style={styles.filterErrorText}>{progressError}</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => loadLearningProgress()}
+          >
+            <Text style={styles.retryText}>Thử lại</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
 
   const renderSectionTabs = (pinned = false) => (
     <View
@@ -410,7 +661,9 @@ export default function VocabularyScreen() {
             accessibilityRole="tab"
             accessibilityState={{ selected }}
             key={id}
-            onPress={() => setSection(id)}
+            onPress={() => {
+              setSection(id);
+            }}
             style={({ pressed }) => [
               styles.segmentButton,
               selected && styles.segmentButtonSelected,
@@ -471,98 +724,143 @@ export default function VocabularyScreen() {
             Tra cứu nhanh trong toàn bộ lộ trình Anh-Việt.
           </Text>
         </View>
+        {section === "vocabulary" ? (
+          <Pressable
+            accessibilityLabel="Mở trang tìm kiếm"
+            accessibilityRole="button"
+            onPress={() => router.push("/vocabulary-search")}
+            style={({ pressed }) => [
+              styles.headerIcon,
+              pressed && styles.resultRowPressed,
+            ]}
+          >
+            <Ionicons name="search" size={24} color="#fff" />
+          </Pressable>
+        ) : null}
       </View>
 
       {renderSectionTabs()}
 
       {section === "vocabulary" ? (
         <>
-          <View style={styles.searchBox}>
-            <Ionicons name="search" size={22} color={colors.primary} />
-            <TextInput
-              accessibilityLabel="Tìm kiếm từ vựng Anh Việt"
-              autoCapitalize="none"
-              autoCorrect={false}
-              clearButtonMode="while-editing"
-              onChangeText={setQuery}
-              placeholder="Tìm từ tiếng Anh hoặc nghĩa tiếng Việt..."
-              placeholderTextColor={colors.muted}
-              returnKeyType="search"
-              style={styles.searchInput}
-              value={query}
-            />
-            {query ? (
-              <Pressable
-                accessibilityLabel="Xóa nội dung tìm kiếm"
-                accessibilityRole="button"
-                hitSlop={10}
-                onPress={() => setQuery("")}
-              >
-                <Ionicons name="close-circle" size={22} color={colors.muted} />
-              </Pressable>
-            ) : null}
-            {searchPending ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : null}
-          </View>
+          {renderLearningFilters()}
 
-          <View style={styles.filterSection}>
-            <View style={styles.filterHeader}>
-              <Text style={styles.filterLabel}>Trạng thái học</Text>
-              {progressLoading ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : null}
-            </View>
-            <ScrollView
-              contentContainerStyle={styles.filterContent}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-            >
-              {learningFilters.map((filter) => {
-                const selected = learningFilter === filter.id;
-                return (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    disabled={progressLoading && filter.id !== "all"}
-                    key={filter.id}
-                    onPress={() => setLearningFilter(filter.id)}
-                    style={({ pressed }) => [
-                      styles.filterChip,
-                      selected && styles.filterChipSelected,
-                      pressed && styles.resultRowPressed,
-                    ]}
-                  >
-                    <Ionicons
-                      name={filter.icon}
-                      size={17}
-                      color={selected ? "#fff" : colors.primary}
-                    />
-                    <Text
-                      style={[
-                        styles.filterChipText,
-                        selected && styles.filterChipTextSelected,
-                      ]}
-                    >
-                      {filter.label} ·{" "}
-                      {statusCounts[filter.id].toLocaleString("vi-VN")}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-            {progressError ? (
-              <View style={styles.filterError}>
-                <Text style={styles.filterErrorText}>{progressError}</Text>
+          {!showFilteredResults && todayWords.length ? (
+            <View style={styles.todayCard}>
+              <View style={styles.todayHeader}>
+                <View style={styles.todayHeadingCopy}>
+                  <Text style={styles.todayEyebrow}>GỢI Ý HÔM NAY</Text>
+                  <Text style={styles.todayTitle}>Từ hôm nay</Text>
+                  <Text style={styles.todaySubtitle}>
+                    Ưu tiên từ đến hạn, từ khó và từ mới.
+                  </Text>
+                </View>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => loadLearningProgress()}
+                  disabled={!todayWords[0]}
+                  onPress={() =>
+                    todayWords[0] &&
+                    router.push({
+                      pathname: "/review/[deckId]",
+                      params: {
+                        deckId: todayWords[0].item.deck.id,
+                        mode: "daily",
+                      },
+                    })
+                  }
+                  style={({ pressed }) => [
+                    styles.quickStudyButton,
+                    pressed && styles.resultRowPressed,
+                  ]}
                 >
-                  <Text style={styles.retryText}>Thử lại</Text>
+                  <Ionicons name="play" size={16} color="#fff" />
+                  <Text style={styles.quickStudyText}>Học nhanh</Text>
                 </Pressable>
               </View>
-            ) : null}
-          </View>
+              <ScrollView
+                contentContainerStyle={styles.todayWords}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+              >
+                {todayWords.map(({ item, label }) => {
+                  const favorite = Boolean(
+                    progressByCardId.get(item.card.id)?.favorite,
+                  );
+                  return (
+                    <Pressable
+                      accessibilityHint="Mở chi tiết từ"
+                      accessibilityRole="button"
+                      key={item.card.id}
+                      onPress={() =>
+                        router.push({
+                          pathname: "/word/[deckId]/[cardId]",
+                          params: {
+                            deckId: item.deck.id,
+                            cardId: item.card.id,
+                          },
+                        })
+                      }
+                      style={({ pressed }) => [
+                        styles.todayWord,
+                        pressed && styles.resultRowPressed,
+                      ]}
+                    >
+                      <View style={styles.todayWordTop}>
+                        <Text style={styles.todayWordStatus}>{label}</Text>
+                        <Pressable
+                          accessibilityLabel={
+                            favorite ? "Bỏ yêu thích" : "Thêm vào yêu thích"
+                          }
+                          accessibilityRole="button"
+                          disabled={savingFavoriteIds.has(item.card.id)}
+                          hitSlop={8}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            toggleFavorite(item);
+                          }}
+                        >
+                          {savingFavoriteIds.has(item.card.id) ? (
+                            <ActivityIndicator
+                              size="small"
+                              color={colors.primary}
+                            />
+                          ) : (
+                            <Ionicons
+                              name={favorite ? "heart" : "heart-outline"}
+                              size={19}
+                              color={favorite ? colors.danger : colors.muted}
+                            />
+                          )}
+                        </Pressable>
+                      </View>
+                      <Text numberOfLines={1} style={styles.todayWordTerm}>
+                        {item.card.term}
+                      </Text>
+                      <Text numberOfLines={2} style={styles.todayWordMeaning}>
+                        {item.card.meaning}
+                      </Text>
+                      <Pressable
+                        accessibilityLabel={`Phát âm ${item.card.term}`}
+                        accessibilityRole="button"
+                        hitSlop={8}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          speakEnglish(item.card.term).catch(() => undefined);
+                        }}
+                        style={styles.todaySpeaker}
+                      >
+                        <Ionicons
+                          name="volume-high"
+                          size={18}
+                          color={colors.primary}
+                        />
+                      </Pressable>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
 
           {showFilteredResults ? (
             <View style={styles.resultsCard}>
@@ -577,6 +875,65 @@ export default function VocabularyScreen() {
                   {searchResults.length} từ
                 </Text>
               </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: sortMenuOpen }}
+                onPress={() => setSortMenuOpen((current) => !current)}
+                style={styles.sortSelect}
+              >
+                <Ionicons
+                  name="swap-vertical"
+                  size={19}
+                  color={colors.primary}
+                />
+                <Text style={styles.sortSelectText}>Sắp xếp</Text>
+                <Text style={styles.sortValue}>
+                  {vocabularySorts.find((item) => item.id === sortMode)?.label}
+                </Text>
+                <Ionicons
+                  name={sortMenuOpen ? "chevron-up" : "chevron-down"}
+                  size={18}
+                  color={colors.muted}
+                />
+              </Pressable>
+              {sortMenuOpen ? (
+                <View style={styles.sortMenu}>
+                  {vocabularySorts.map((option) => {
+                    const selected = option.id === sortMode;
+                    return (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        key={option.id}
+                        onPress={() => {
+                          setSortMode(option.id);
+                          setSortMenuOpen(false);
+                        }}
+                        style={[
+                          styles.sortOption,
+                          selected && styles.sortOptionSelected,
+                        ]}
+                      >
+                        <Ionicons
+                          name={option.icon}
+                          size={19}
+                          color={colors.primary}
+                        />
+                        <Text style={styles.sortOptionText}>
+                          {option.label}
+                        </Text>
+                        {selected ? (
+                          <Ionicons
+                            name="checkmark"
+                            size={19}
+                            color={colors.primary}
+                          />
+                        ) : null}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
 
               {visibleResults.length ? (
                 visibleResults.map(
@@ -634,13 +991,50 @@ export default function VocabularyScreen() {
                           color={colors.primary}
                         />
                       </Pressable>
-                      {progressByCardId.get(card.id)?.favorite ? (
-                        <Ionicons
-                          name="heart"
-                          size={19}
-                          color={colors.danger}
-                        />
-                      ) : null}
+                      <Pressable
+                        accessibilityLabel={
+                          progressByCardId.get(card.id)?.favorite
+                            ? "Bỏ yêu thích"
+                            : "Thêm vào yêu thích"
+                        }
+                        accessibilityRole="button"
+                        disabled={savingFavoriteIds.has(card.id)}
+                        hitSlop={8}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          toggleFavorite({
+                            card,
+                            deck,
+                            categoryTitle,
+                            topicTitle,
+                          });
+                        }}
+                        style={({ pressed }) => [
+                          styles.favoriteButton,
+                          pressed && styles.speakerButtonPressed,
+                        ]}
+                      >
+                        {savingFavoriteIds.has(card.id) ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={colors.primary}
+                          />
+                        ) : (
+                          <Ionicons
+                            name={
+                              progressByCardId.get(card.id)?.favorite
+                                ? "heart"
+                                : "heart-outline"
+                            }
+                            size={20}
+                            color={
+                              progressByCardId.get(card.id)?.favorite
+                                ? colors.danger
+                                : colors.muted
+                            }
+                          />
+                        )}
+                      </Pressable>
                       <Ionicons
                         name="chevron-forward"
                         size={19}
@@ -669,11 +1063,36 @@ export default function VocabularyScreen() {
                 </View>
               )}
 
-              {searchResults.length > SEARCH_RESULT_LIMIT ? (
-                <Text style={styles.limitHint}>
-                  Đang hiển thị {SEARCH_RESULT_LIMIT} kết quả đầu tiên. Hãy nhập
-                  thêm ký tự để thu hẹp tìm kiếm.
-                </Text>
+              {searchResults.length > visibleLimit ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() =>
+                    setVisibleLimit((current) =>
+                      Math.min(
+                        current + SEARCH_RESULT_PAGE_SIZE,
+                        searchResults.length,
+                      ),
+                    )
+                  }
+                  style={({ pressed }) => [
+                    styles.loadMoreButton,
+                    pressed && styles.resultRowPressed,
+                  ]}
+                >
+                  <Text style={styles.loadMoreText}>
+                    Xem thêm{" "}
+                    {Math.min(
+                      SEARCH_RESULT_PAGE_SIZE,
+                      searchResults.length - visibleLimit,
+                    )}{" "}
+                    từ
+                  </Text>
+                  <Ionicons
+                    name="chevron-down"
+                    size={18}
+                    color={colors.primary}
+                  />
+                </Pressable>
               ) : null}
             </View>
           ) : (
@@ -1088,6 +1507,7 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
       alignItems: "center",
       justifyContent: "center",
     },
+    headerIconActive: { backgroundColor: "rgba(255,255,255,0.28)" },
     segmentedControl: {
       flexDirection: "row",
       minHeight: 58,
@@ -1131,19 +1551,121 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
     segmentButtonSelected: { borderBottomColor: colors.primary },
     segmentText: { color: colors.muted, fontSize: 14, fontWeight: "900" },
     segmentTextSelected: { color: colors.primary },
-    searchBox: {
-      minHeight: 54,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-      paddingHorizontal: 15,
-      borderWidth: 1.5,
-      borderColor: colors.primarySoft,
-      borderRadius: 18,
+    searchSection: {
+      gap: 9,
+      padding: 14,
+      borderRadius: 20,
       backgroundColor: colors.surface,
       ...shadows.card,
     },
-    searchInput: { flex: 1, minHeight: 50, color: colors.text, fontSize: 15 },
+    searchHeading: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    searchLabel: { color: colors.text, fontSize: 15, fontWeight: "900" },
+    searchMeta: { color: colors.muted, fontSize: 11, fontWeight: "700" },
+    searchBox: {
+      minHeight: 50,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 9,
+      paddingHorizontal: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 15,
+      backgroundColor: colors.background,
+    },
+    searchIcon: {
+      width: 34,
+      height: 34,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 11,
+      backgroundColor: colors.primarySoft,
+    },
+    searchInput: { flex: 1, minHeight: 48, color: colors.text, fontSize: 14 },
+    todayCard: {
+      gap: 14,
+      padding: 17,
+      borderRadius: 22,
+      backgroundColor: colors.surface,
+      ...shadows.card,
+    },
+    todayHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    todayHeadingCopy: { flex: 1 },
+    todayEyebrow: {
+      color: colors.primary,
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 0.9,
+    },
+    todayTitle: {
+      color: colors.text,
+      fontSize: 20,
+      fontWeight: "900",
+      marginTop: 2,
+    },
+    todaySubtitle: { color: colors.muted, fontSize: 12, marginTop: 3 },
+    quickStudyButton: {
+      minHeight: 42,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      paddingHorizontal: 13,
+      borderRadius: 14,
+      backgroundColor: colors.primary,
+    },
+    quickStudyText: { color: "#fff", fontSize: 12, fontWeight: "900" },
+    todayWords: { gap: 10, paddingRight: 3 },
+    todayWord: {
+      width: 158,
+      minHeight: 150,
+      padding: 13,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 18,
+      backgroundColor: colors.background,
+    },
+    todayWordTop: {
+      minHeight: 24,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+    },
+    todayWordStatus: {
+      color: colors.primary,
+      fontSize: 10,
+      fontWeight: "900",
+    },
+    todayWordTerm: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: "900",
+      marginTop: 8,
+    },
+    todayWordMeaning: {
+      minHeight: 38,
+      color: colors.muted,
+      fontSize: 12,
+      lineHeight: 18,
+      marginTop: 3,
+    },
+    todaySpeaker: {
+      width: 34,
+      height: 34,
+      alignItems: "center",
+      justifyContent: "center",
+      alignSelf: "flex-end",
+      borderRadius: 12,
+      backgroundColor: colors.primarySoft,
+    },
     filterSection: { gap: 8 },
     filterHeader: {
       minHeight: 22,
@@ -1328,6 +1850,50 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
       fontWeight: "900",
     },
     previewCount: { color: colors.primary, fontWeight: "800" },
+    sortSelect: {
+      minHeight: 46,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 12,
+      marginBottom: 7,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.background,
+    },
+    sortSelectText: { color: colors.text, fontSize: 13, fontWeight: "900" },
+    sortValue: {
+      flex: 1,
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: "800",
+      textAlign: "right",
+    },
+    sortMenu: {
+      overflow: "hidden",
+      marginBottom: 7,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.background,
+    },
+    sortOption: {
+      minHeight: 46,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingHorizontal: 13,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    sortOptionSelected: { backgroundColor: colors.primarySoft },
+    sortOptionText: {
+      flex: 1,
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "800",
+    },
     resultRow: {
       minHeight: 82,
       flexDirection: "row",
@@ -1358,6 +1924,14 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
       justifyContent: "center",
     },
     speakerButtonPressed: { opacity: 0.55 },
+    favoriteButton: {
+      width: 38,
+      height: 38,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 13,
+      backgroundColor: colors.dangerSoft,
+    },
     emptyState: {
       alignItems: "center",
       paddingHorizontal: 20,
@@ -1380,13 +1954,17 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
       marginTop: 6,
       textAlign: "center",
     },
-    limitHint: {
-      color: colors.muted,
-      fontSize: 12,
-      lineHeight: 18,
+    loadMoreButton: {
+      minHeight: 46,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 7,
       marginTop: 12,
-      textAlign: "center",
+      borderRadius: 14,
+      backgroundColor: colors.primarySoft,
     },
+    loadMoreText: { color: colors.primary, fontSize: 13, fontWeight: "900" },
     wordRow: {
       minHeight: 55,
       flexDirection: "row",

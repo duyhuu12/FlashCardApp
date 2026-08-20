@@ -10,10 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.penguinlingo.flashcardapp"
+      "bundleIdentifier": "com.dolphinlingo.flashcardapp.app"
     },
     "android": {
-      "package": "com.penguinlingo.flashcardapp",
+      "package": "com.dolphinlingo.flashcardapp.app",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#63DDE0",
@@ -49,8 +49,7 @@
           "microphonePermission": false,
           "recordAudioAndroid": false
         }
-      ],
-      "expo-asset"
+      ]
     ],
     "experiments": {
       "reactCompiler": true

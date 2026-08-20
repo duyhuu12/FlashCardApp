@@ -25,6 +25,7 @@ function Navigation() {
         </Stack.Protected>
         <Stack.Protected guard={Boolean(user)}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="vocabulary-search" options={{ headerShown: false }} />
           <Stack.Screen name="deck/form" options={{ title: 'Bộ từ' }} />
           <Stack.Screen name="deck/[id]" options={{ title: 'Chi tiết bộ từ' }} />
           <Stack.Screen name="card/form" options={{ title: 'Thẻ từ' }} />

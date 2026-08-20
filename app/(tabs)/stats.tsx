@@ -14,8 +14,8 @@ import { friendlyError } from "@/src/utils/errors";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useRef, useState } from "react";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type StatsSegment = "overview" | "achievements";
@@ -30,7 +30,7 @@ const emptyStats: LearningStats = {
 };
 
 export default function StatsScreen() {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -40,6 +40,10 @@ export default function StatsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [segment, setSegment] = useState<StatsSegment>("overview");
+  const [tabsPinned, setTabsPinned] = useState(false);
+  const [progressSlide, setProgressSlide] = useState(0);
+  const [progressCardWidth, setProgressCardWidth] = useState(0);
+  const tabsTopRef = useRef(Number.POSITIVE_INFINITY);
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
@@ -145,56 +149,116 @@ export default function StatsScreen() {
   );
   const unlockedCount = achievements.filter((item) => item.unlocked).length;
 
+  const renderStatsTabs = (pinned = false) => (
+    <View
+      accessibilityRole="tablist"
+      onLayout={
+        pinned
+          ? undefined
+          : (event) => {
+              tabsTopRef.current = event.nativeEvent.layout.y;
+            }
+      }
+      style={[styles.segmentedControl, pinned && styles.segmentedControlPinned]}
+    >
+      {(
+        [
+          ["overview", "stats-chart", "Tổng quan"],
+          ["achievements", "trophy", "Thành tích"],
+        ] as const
+      ).map(([id, icon, label]) => {
+        const selected = segment === id;
+        return (
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
+            key={id}
+            onPress={() => setSegment(id)}
+            style={({ pressed }) => [
+              styles.segmentButton,
+              selected && styles.segmentButtonSelected,
+              pressed && styles.segmentButtonPressed,
+            ]}
+          >
+            <Ionicons
+              name={icon}
+              size={20}
+              color={selected ? colors.primary : colors.muted}
+            />
+            <Text
+              style={[
+                styles.segmentText,
+                selected && styles.segmentTextSelected,
+              ]}
+            >
+              {label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+
   return (
-    <AppScreen contentStyle={styles.screen} safeAreaEdges={["left", "right"]}>
-      <StatusBar style="light" translucent backgroundColor="transparent" />
+    <AppScreen
+      contentStyle={styles.screen}
+      safeAreaEdges={["left", "right"]}
+      scrollProps={{
+        onScroll: (event) => {
+          const nextPinned =
+            event.nativeEvent.contentOffset.y >=
+            tabsTopRef.current - insets.top;
+          setTabsPinned((current) =>
+            current === nextPinned ? current : nextPinned,
+          );
+        },
+        scrollEventThrottle: 16,
+      }}
+      floatingContent={
+        tabsPinned ? (
+          <View style={[styles.pinnedTabsLayer, { paddingTop: insets.top }]}>
+            {renderStatsTabs(true)}
+          </View>
+        ) : null
+      }
+    >
+      <StatusBar
+        style={tabsPinned ? (isDark ? "light" : "dark") : "light"}
+        translucent
+        backgroundColor="transparent"
+      />
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <View>
           <Text style={styles.title}>Tiến độ học tập</Text>
           <Text style={styles.subtitle}>Mỗi ngày tiến thêm một chút</Text>
         </View>
-        z
       </View>
 
-      <View accessibilityRole="tablist" style={styles.segmentedControl}>
-        {(
-          [
-            ["overview", "stats-chart", "Tổng quan"],
-            ["achievements", "trophy", "Thành tích"],
-          ] as const
-        ).map(([id, icon, label]) => {
-          const selected = segment === id;
-          return (
-            <Pressable
-              accessibilityRole="tab"
-              accessibilityState={{ selected }}
-              key={id}
-              onPress={() => setSegment(id)}
-              style={[
-                styles.segmentButton,
-                selected && styles.segmentButtonSelected,
-              ]}
-            >
-              <Ionicons
-                name={icon}
-                size={18}
-                color={selected ? "#fff" : colors.primary}
-              />
-              <Text
-                style={[
-                  styles.segmentText,
-                  selected && styles.segmentTextSelected,
-                ]}
-              >
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {renderStatsTabs()}
 
       {segment === "overview" ? (
         <>
+          <View
+            onLayout={(event) =>
+              setProgressCardWidth(event.nativeEvent.layout.width)
+            }
+            style={styles.progressCarousel}
+          >
+            <ScrollView
+              decelerationRate="fast"
+              horizontal
+              onMomentumScrollEnd={(event) => {
+                if (!progressCardWidth) return;
+                setProgressSlide(
+                  Math.round(
+                    event.nativeEvent.contentOffset.x / progressCardWidth,
+                  ),
+                );
+              }}
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+            >
+              <View style={[styles.progressPage, { width: progressCardWidth }]}>
           <View style={styles.hero}>
             <View style={styles.circle}>
               <Text style={styles.percent}>{percent}%</Text>
@@ -211,7 +275,9 @@ export default function StatsScreen() {
               </Text>
             </View>
           </View>
+              </View>
 
+              <View style={[styles.progressPage, { width: progressCardWidth }]}>
           <View style={styles.dailyCard}>
             <View style={styles.dailyTop}>
               <View style={styles.dailyIcon}>
@@ -240,6 +306,20 @@ export default function StatsScreen() {
                 <Text style={styles.quickValue}>{stats.xp ?? 0}</Text>
                 <Text style={styles.quickLabel}>KN tích lũy</Text>
               </View>
+            </View>
+          </View>
+              </View>
+            </ScrollView>
+            <View style={styles.carouselDots}>
+              {[0, 1].map((index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.carouselDot,
+                    progressSlide === index && styles.carouselDotActive,
+                  ]}
+                />
+              ))}
             </View>
           </View>
 
@@ -439,66 +519,101 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
     },
     segmentedControl: {
       flexDirection: "row",
-      gap: 5,
-      padding: 5,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 17,
+      minHeight: 58,
+      marginHorizontal: -20,
+      marginTop: -16,
+      paddingHorizontal: 20,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    segmentedControlPinned: {
+      width: "100%",
+      maxWidth: 620,
+      marginHorizontal: 0,
+      marginTop: 0,
+      elevation: 8,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.12,
+      shadowRadius: 6,
+    },
+    pinnedTabsLayer: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 30,
+      alignItems: "center",
       backgroundColor: colors.surface,
     },
     segmentButton: {
-      minHeight: 44,
+      minHeight: 58,
       flex: 1,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      gap: 7,
-      borderRadius: 13,
+      gap: 8,
+      borderBottomWidth: 3,
+      borderBottomColor: "transparent",
     },
-    segmentButtonSelected: { backgroundColor: colors.primary },
-    segmentText: { color: colors.primary, fontSize: 14, fontWeight: "900" },
-    segmentTextSelected: { color: "#fff" },
+    segmentButtonSelected: { borderBottomColor: colors.primary },
+    segmentButtonPressed: { opacity: 0.72 },
+    segmentText: { color: colors.muted, fontSize: 14, fontWeight: "900" },
+    segmentTextSelected: { color: colors.primary },
+    progressCarousel: { width: "auto", marginHorizontal: -20, gap: 9 },
+    progressPage: { paddingVertical: 2 },
+    carouselDots: {
+      minHeight: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 7,
+    },
+    carouselDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 99,
+      backgroundColor: colors.border,
+    },
+    carouselDotActive: { width: 20, backgroundColor: colors.primary },
     hero: {
       minHeight: 150,
       flexDirection: "row",
       alignItems: "center",
       gap: 18,
-      padding: 20,
-      borderRadius: 24,
-      backgroundColor: colors.primary,
-      ...shadows.card,
+      paddingHorizontal: 20,
+      paddingVertical: 18,
     },
     circle: {
       width: 104,
       height: 104,
       borderRadius: 52,
       borderWidth: 9,
-      borderColor: "rgba(255,255,255,0.28)",
+      borderColor: colors.primarySoft,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: "rgba(255,255,255,0.12)",
+      backgroundColor: colors.primarySoft,
     },
-    percent: { color: "#fff", fontSize: 26, fontWeight: "900" },
+    percent: { color: colors.primary, fontSize: 26, fontWeight: "900" },
     small: {
-      color: "rgba(255,255,255,0.78)",
+      color: colors.muted,
       fontSize: 9,
       fontWeight: "900",
       marginTop: 2,
     },
     heroCopy: { flex: 1 },
     heroEyebrow: {
-      color: "rgba(255,255,255,0.72)",
+      color: colors.primary,
       fontSize: 10,
       fontWeight: "900",
       letterSpacing: 1,
     },
-    heroTitle: { color: "#fff", fontSize: 22, fontWeight: "900", marginTop: 5 },
-    heroText: { color: "rgba(255,255,255,0.76)", marginTop: 6, lineHeight: 18 },
+    heroTitle: { color: colors.text, fontSize: 22, fontWeight: "900", marginTop: 5 },
+    heroText: { color: colors.muted, marginTop: 6, lineHeight: 18 },
     dailyCard: {
-      padding: 17,
-      borderRadius: 21,
-      backgroundColor: colors.surface,
-      ...shadows.card,
+      paddingHorizontal: 20,
+      paddingVertical: 17,
     },
     dailyTop: { flexDirection: "row", alignItems: "center", gap: 11 },
     dailyIcon: {

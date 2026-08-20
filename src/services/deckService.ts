@@ -451,17 +451,19 @@ export async function getCardProgress(uid: string, cardId: string) {
 
 export async function setCardFavorite(uid: string, deckId: string, cardId: string, favorite: boolean) {
   const { db } = requireFirebase();
-  await setDoc(doc(db, 'users', uid, 'cardProgress', cardId), {
+  const progressRef = doc(db, 'users', uid, 'cardProgress', cardId);
+  const snapshot = await getDoc(progressRef);
+  const current = snapshot.exists()
+    ? snapshot.data() as CardProgress
+    : initialProgress(cardId, deckId);
+  await setDoc(progressRef, {
+    ...current,
     cardId,
     deckId,
     favorite,
     updatedAt: serverTimestamp(),
   }, { merge: true });
-  const cached = progressMemoryCache.get(uid);
-  const index = cached?.indexByCardId.get(cardId);
-  if (cached && index !== undefined) {
-    updateCachedProgress(uid, { ...cached.items[index], favorite });
-  }
+  updateCachedProgress(uid, { ...current, cardId, deckId, favorite, updatedAt: new Date() });
 }
 
 function asMillis(value: CardProgress['nextReviewAt']) {
