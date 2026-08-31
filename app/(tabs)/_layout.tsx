@@ -10,6 +10,7 @@ import {
   View,
   type ImageSourcePropType,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const tabIcons = {
   learning: require("@/assets/images/tab-icons/learning.png"),
@@ -40,6 +41,10 @@ function GameTabIcon({
 
 export default function TabLayout() {
   const { colors } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const bottomInset = insets.bottom;
+  const tabBarHeight = 60 + bottomInset;
+
   return (
     <Tabs
       screenOptions={{
@@ -48,13 +53,14 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
         tabBarStyle: {
-          height: 70,
-          paddingTop: 7,
-          paddingBottom: 7,
+          height: tabBarHeight,
+          paddingTop: 6,
+          paddingBottom: bottomInset > 0 ? bottomInset : 6,
           borderTopColor: colors.border,
           backgroundColor: colors.surface,
+          elevation: 8,
         },
-        tabBarItemStyle: { justifyContent: "center" },
+        tabBarItemStyle: { justifyContent: "center", height: 48 },
       }}
     >
       <Tabs.Screen
@@ -101,24 +107,25 @@ export default function TabLayout() {
   );
 }
 
-const createStyles = (colors: AppColors) => StyleSheet.create({
-  iconShell: {
-    width: 48,
-    height: 46,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 15,
-  },
-  iconShellFocused: {
-    borderWidth: 2,
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
-    shadowColor: colors.primaryDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 7,
-    elevation: 5,
-  },
-  icon: { width: 43, height: 43 },
-  iconInactive: { opacity: 0.58, transform: [{ scale: 0.9 }] },
-});
+const createStyles = (colors: AppColors) =>
+  StyleSheet.create({
+    iconShell: {
+      width: 44,
+      height: 44,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 14,
+    },
+    iconShellFocused: {
+      borderWidth: 2,
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft,
+      shadowColor: colors.primaryDark,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.35,
+      shadowRadius: 7,
+      elevation: 5,
+    },
+    icon: { width: 38, height: 38 },
+    iconInactive: { opacity: 0.58, transform: [{ scale: 0.9 }] },
+  });

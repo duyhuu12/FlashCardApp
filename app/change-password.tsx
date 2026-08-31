@@ -115,7 +115,7 @@ export default function ChangePasswordScreen() {
         <View style={styles.card}>
           <Text style={styles.title}>Đổi mật khẩu</Text>
           <Text style={styles.subtitle}>
-            {" "}
+            Cập nhật mật khẩu mới cho tài khoản{" "}
             <Text style={styles.emailHighlight}>{user?.email}</Text>.
           </Text>
 

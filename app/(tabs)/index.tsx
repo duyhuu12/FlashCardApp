@@ -791,7 +791,7 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
       width: "100%",
       maxWidth: 620,
       alignSelf: "center",
-      paddingBottom: 36,
+      paddingBottom: 48,
     },
     topBar: {
       width: "100%",
