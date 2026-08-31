@@ -1,0 +1,12 @@
+[debug] [2026-08-20T15:22:29.452Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-20T15:22:29.455Z] > authorizing via signed-in user (dinhhuuduy46@gmail.com)
+[debug] [2026-08-20T15:22:30.737Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-20T15:22:30.738Z] > authorizing via signed-in user (dinhhuuduy46@gmail.com)
+[debug] [2026-08-20T15:22:37.404Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-20T15:22:37.408Z] > authorizing via signed-in user (dinhhuuduy46@gmail.com)
+[debug] [2026-08-20T15:22:37.540Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-20T15:22:37.540Z] > authorizing via signed-in user (dinhhuuduy46@gmail.com)
+[debug] [2026-08-20T15:22:37.673Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-20T15:22:37.674Z] > authorizing via signed-in user (dinhhuuduy46@gmail.com)
+[debug] [2026-08-20T15:22:37.731Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-20T15:22:37.731Z] > authorizing via signed-in user (dinhhuuduy46@gmail.com)

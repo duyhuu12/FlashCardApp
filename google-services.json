@@ -7,6 +7,35 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:445960228407:android:86e0cacb76559d84cdb9b2",
+        "android_client_info": {
+          "package_name": "com.dolphinlingo.flashcardapp.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "445960228407-7rpnp2glf04imc4rju381fa7ijmd6t3h.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDX9s6UTRsGQp3PNI3n4cZ7Sibsesv_PlQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "445960228407-7rpnp2glf04imc4rju381fa7ijmd6t3h.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:445960228407:android:4f3c58ca17933a66cdb9b2",
         "android_client_info": {
           "package_name": "com.penguinlingo.flashcardapp"
