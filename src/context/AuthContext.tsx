@@ -4,9 +4,13 @@ import type { UserProfile } from '@/src/types/models';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
   onAuthStateChanged,
+  reauthenticateWithCredential,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
+  updatePassword,
   updateProfile,
   type User,
 } from 'firebase/auth';
@@ -21,7 +25,10 @@ interface AuthValue {
   signIn(email: string, password: string): Promise<void>;
   signInWithGoogle(): Promise<boolean>;
   signUp(name: string, email: string, password: string): Promise<void>;
+  resetPassword(email: string): Promise<void>;
+  changePassword(currentPassword: string, newPassword: string): Promise<void>;
   updateDisplayName(name: string): Promise<void>;
+  updateProfileTags(ageGroup?: string, interests?: string[], styleTag?: string): Promise<void>;
   signOut(): Promise<void>;
   refreshProfile(): Promise<void>;
 }
@@ -31,7 +38,7 @@ const PROFILE_CACHE_PREFIX = 'dolphinlingo:profile:';
 
 type CachedProfile = Pick<
   UserProfile,
-  'uid' | 'displayName' | 'email' | 'avatarId' | 'reminderEnabled' | 'reminderHour' | 'reminderMinute'
+  'uid' | 'displayName' | 'email' | 'avatarId' | 'reminderEnabled' | 'reminderHour' | 'reminderMinute' | 'ageGroup' | 'interests' | 'styleTag'
 >;
 
 function profileCacheKey(uid: string) {
@@ -70,6 +77,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
         reminderEnabled: Boolean(nextProfile.reminderEnabled),
         reminderHour: nextProfile.reminderHour ?? 20,
         reminderMinute: nextProfile.reminderMinute ?? 0,
+        ageGroup: nextProfile.ageGroup,
+        interests: nextProfile.interests,
+        styleTag: nextProfile.styleTag,
       };
       AsyncStorage.setItem(profileCacheKey(currentUser.uid), JSON.stringify(cachedProfile)).catch(() => undefined);
       setDoc(doc(db, 'leaderboard', currentUser.uid), { uid: currentUser.uid, displayName: nextProfile.displayName || 'Người học', avatarId: nextProfile.avatarId || 'avt1' }, { merge: true }).catch(() => undefined);
@@ -147,6 +157,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
       });
       await loadProfile(credential.user);
     },
+    async resetPassword(email) {
+      if (!auth) throw new Error('Firebase chưa được cấu hình.');
+      await sendPasswordResetEmail(auth, email.trim());
+    },
+    async changePassword(currentPassword, newPassword) {
+      if (!auth?.currentUser || !auth.currentUser.email) {
+        throw new Error('Bạn chưa đăng nhập.');
+      }
+      const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+      await reauthenticateWithCredential(auth.currentUser, credential);
+      await updatePassword(auth.currentUser, newPassword);
+    },
     async updateDisplayName(name) {
       if (!auth?.currentUser || !db) throw new Error('Firebase chưa được cấu hình.');
       const nextName = name.trim().replace(/\s+/g, ' ');
@@ -161,6 +183,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
           displayName: nextName,
         }, { merge: true }),
       ]);
+      await loadProfile(auth.currentUser);
+    },
+    async updateProfileTags(ageGroup, interests, styleTag) {
+      if (!auth?.currentUser || !db) throw new Error('Firebase chưa được cấu hình.');
+      await setDoc(doc(db, 'users', auth.currentUser.uid), {
+        ageGroup: ageGroup || null,
+        interests: interests || [],
+        styleTag: styleTag || null,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
       await loadProfile(auth.currentUser);
     },
     async signOut() {

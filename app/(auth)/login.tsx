@@ -94,6 +94,11 @@ export default function LoginScreen() {
             secureTextEntry
             placeholder="Vui lòng nhập mật khẩu"
           />
+          <View style={styles.forgotRow}>
+            <Link href="/(auth)/forgot-password" style={styles.forgotLink}>
+              Quên mật khẩu?
+            </Link>
+          </View>
         </View>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <AppButton
@@ -164,6 +169,8 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
     },
     configText: { color: colors.warning, lineHeight: 20 },
     fields: { gap: 12 },
+    forgotRow: { alignItems: "flex-end", marginTop: 2 },
+    forgotLink: { color: colors.primary, fontSize: 13, fontWeight: "700" },
     error: { color: colors.danger, lineHeight: 20, marginTop: 10 },
     loginButton: { marginTop: 16 },
     switch: { textAlign: "center", color: colors.muted, marginTop: 16 },

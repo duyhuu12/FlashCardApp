@@ -11,6 +11,9 @@ export interface UserProfile {
   reminderHour: number;
   reminderMinute: number;
   notificationId?: string | null;
+  ageGroup?: string;
+  interests?: string[];
+  styleTag?: string;
   createdAt?: FirestoreDate;
 }
 

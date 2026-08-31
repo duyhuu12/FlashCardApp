@@ -33,6 +33,7 @@ function Navigation() {
           <Stack.Screen name="review/[deckId]" options={{ title: 'Ôn tập', headerBackTitle: 'Thoát' }} />
           <Stack.Screen name="review/result" options={{ title: 'Kết quả', headerBackVisible: false }} />
           <Stack.Screen name="practice/[deckId]" options={{ title: 'Luyện tập' }} />
+          <Stack.Screen name="change-password" options={{ headerShown: false }} />
         </Stack.Protected>
       </Stack>
       <StatusBar style={isDark ? 'light' : 'dark'} />

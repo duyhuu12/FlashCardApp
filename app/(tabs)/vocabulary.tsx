@@ -57,11 +57,11 @@ const learningFilters: {
   icon: keyof typeof Ionicons.glyphMap;
 }[] = [
   { id: "all", label: "Tất cả", icon: "albums-outline" },
-  { id: "new", label: "Chưa học", icon: "sparkles-outline" },
-  { id: "learning", label: "Đang học", icon: "time-outline" },
-  { id: "mastered", label: "Đã thuộc", icon: "checkmark-circle-outline" },
-  { id: "due", label: "Cần ôn", icon: "alarm-outline" },
-  { id: "hard", label: "Từ khó", icon: "alert-circle-outline" },
+  { id: "new", label: "Chưa học", icon: "book-outline" },
+  { id: "learning", label: "Đang học", icon: "sync-outline" },
+  { id: "mastered", label: "Đã thuộc", icon: "ribbon-outline" },
+  { id: "due", label: "Cần ôn", icon: "repeat-outline" },
+  { id: "hard", label: "Từ khó", icon: "warning-outline" },
   { id: "favorite", label: "Yêu thích", icon: "heart-outline" },
 ];
 
@@ -70,11 +70,11 @@ const vocabularySorts: {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
 }[] = [
-  { id: "smart", label: "Phù hợp nhất", icon: "sparkles-outline" },
+  { id: "smart", label: "Phù hợp nhất", icon: "compass-outline" },
   { id: "az", label: "A–Z", icon: "text-outline" },
   { id: "recent", label: "Học gần đây", icon: "time-outline" },
-  { id: "hard", label: "Khó nhất", icon: "fitness-outline" },
-  { id: "due", label: "Đến hạn trước", icon: "alarm-outline" },
+  { id: "hard", label: "Khó nhất", icon: "warning-outline" },
+  { id: "due", label: "Đến hạn trước", icon: "repeat-outline" },
 ];
 
 const reviewModes: {
@@ -93,19 +93,19 @@ const reviewModes: {
     id: "hard",
     label: "Từ khó",
     description: "Tập trung vào từ khó nhớ",
-    icon: "fitness",
+    icon: "warning",
   },
   {
     id: "due",
     label: "Đến hạn",
     description: "Ôn theo lịch lặp lại",
-    icon: "time",
+    icon: "repeat",
   },
   {
     id: "new",
     label: "Từ mới",
     description: "Học những từ chưa gặp",
-    icon: "sparkles",
+    icon: "book",
   },
 ];
 

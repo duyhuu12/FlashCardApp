@@ -16,6 +16,7 @@ import {
 } from "@/src/theme/colors";
 import { friendlyError } from "@/src/utils/errors";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { doc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
@@ -37,11 +38,39 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+const ageGroups = [
+  { id: "<18", label: "🎒 Dưới 18 tuổi" },
+  { id: "18-24", label: "🎓 18 – 24 tuổi" },
+  { id: "25-34", label: "💼 25 – 34 tuổi" },
+  { id: "35-44", label: "☕ 35 – 44 tuổi" },
+  { id: "45+", label: "🌟 45+ tuổi" },
+];
+
+const interestOptions = [
+  { id: "music", label: "🎧 Âm nhạc" },
+  { id: "movie", label: "🎬 Phim ảnh" },
+  { id: "travel", label: "✈️ Du lịch" },
+  { id: "game", label: "🎮 Game" },
+  { id: "book", label: "📚 Đọc sách" },
+  { id: "work", label: "💼 Công việc / TOEIC" },
+  { id: "food", label: "🍳 Ẩm thực" },
+  { id: "sport", label: "⚽ Thể thao" },
+];
+
+const styleOptions = [
+  { id: "student", label: "🎓 Học sinh / Sinh viên" },
+  { id: "office", label: "💼 Dân công sở" },
+  { id: "creative", label: "🎨 Sáng tạo & Nghệ thuật" },
+  { id: "sporty", label: "⚡ Năng động & Thể thao" },
+  { id: "chill", label: "☕ Thư thái & Tối giản" },
+];
+
 export default function SettingsScreen() {
-  const { user, profile, refreshProfile, signOut, updateDisplayName } =
+  const { user, profile, refreshProfile, signOut, updateDisplayName, updateProfileTags } =
     useAuth();
   const { colors, isDark, setThemePreference } = useAppTheme();
   const styles = useThemedStyles(createStyles);
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [enabled, setEnabled] = useState(false);
   const [hour, setHour] = useState("20");
@@ -52,10 +81,13 @@ export default function SettingsScreen() {
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [savingAvatarId, setSavingAvatarId] = useState("");
-  const [nameEditorOpen, setNameEditorOpen] = useState(false);
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [nameError, setNameError] = useState("");
-  const [savingName, setSavingName] = useState(false);
+  const [selectedAge, setSelectedAge] = useState<string>("");
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [selectedStyle, setSelectedStyle] = useState<string>("");
+  const [savingProfile, setSavingProfile] = useState(false);
   const drawerProgress = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -63,14 +95,12 @@ export default function SettingsScreen() {
     setEnabled(profile.reminderEnabled);
     setHour(String(profile.reminderHour).padStart(2, "0"));
     setMinute(String(profile.reminderMinute).padStart(2, "0"));
+    setSelectedAge(profile.ageGroup || "");
+    setSelectedInterests(profile.interests || []);
+    setSelectedStyle(profile.styleTag || "");
   }, [profile]);
 
-  useEffect(() => {
-    if (nameEditorOpen) return;
-    setDisplayName(profile?.displayName || user?.displayName || "Người học");
-  }, [nameEditorOpen, profile?.displayName, user?.displayName]);
-
-  async function saveDisplayName() {
+  async function saveProfile() {
     const nextName = displayName.trim().replace(/\s+/g, " ");
     if (nextName.length < 2) {
       setNameError("Tên hiển thị cần có ít nhất 2 ký tự.");
@@ -80,21 +110,36 @@ export default function SettingsScreen() {
       setNameError("Tên hiển thị không được vượt quá 40 ký tự.");
       return;
     }
-    if (nextName === profile?.displayName) {
-      setNameEditorOpen(false);
-      return;
-    }
-    setSavingName(true);
+    setSavingProfile(true);
     setNameError("");
     try {
-      await updateDisplayName(nextName);
-      setNameEditorOpen(false);
+      const tasks: Promise<void>[] = [
+        updateProfileTags(selectedAge, selectedInterests, selectedStyle),
+      ];
+      if (nextName !== profile?.displayName) {
+        tasks.push(updateDisplayName(nextName));
+      }
+      await Promise.all(tasks);
+      setProfileEditorOpen(false);
     } catch (error) {
       setNameError(friendlyError(error));
     } finally {
-      setSavingName(false);
+      setSavingProfile(false);
     }
   }
+
+  function toggleInterest(id: string) {
+    setSelectedInterests((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
+    );
+  }
+
+  useEffect(() => {
+    if (profileEditorOpen) return;
+    setDisplayName(profile?.displayName || user?.displayName || "Người học");
+  }, [profileEditorOpen, profile?.displayName, user?.displayName]);
 
   async function saveReminder() {
     if (!user) return;
@@ -250,16 +295,44 @@ export default function SettingsScreen() {
             {profile?.displayName || user?.displayName || "Người học"}
           </Text>
           <Text style={styles.email}>{user?.email}</Text>
+          <View style={styles.headerTagRow}>
+            {profile?.ageGroup ? (
+              <View style={styles.headerTagBadge}>
+                <Text style={styles.headerTagBadgeText}>
+                  {ageGroups.find((a) => a.id === profile.ageGroup)?.label}
+                </Text>
+              </View>
+            ) : null}
+            {profile?.styleTag ? (
+              <View style={styles.headerTagBadge}>
+                <Text style={styles.headerTagBadgeText}>
+                  {styleOptions.find((s) => s.id === profile.styleTag)?.label}
+                </Text>
+              </View>
+            ) : null}
+            {(profile?.interests || []).map((interestId) => {
+              const item = interestOptions.find((i) => i.id === interestId);
+              if (!item) return null;
+              return (
+                <View key={interestId} style={styles.headerTagBadge}>
+                  <Text style={styles.headerTagBadgeText}>{item.label}</Text>
+                </View>
+              );
+            })}
+          </View>
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Sửa tên hiển thị"
+          accessibilityLabel="Chỉnh sửa hồ sơ"
           onPress={() => {
             setDisplayName(
               profile?.displayName || user?.displayName || "Người học",
             );
+            setSelectedAge(profile?.ageGroup || "");
+            setSelectedInterests(profile?.interests || []);
+            setSelectedStyle(profile?.styleTag || "");
             setNameError("");
-            setNameEditorOpen(true);
+            setProfileEditorOpen(true);
           }}
           style={styles.settingsIcon}
         >
@@ -476,6 +549,35 @@ export default function SettingsScreen() {
                 <View style={styles.card}>
                   <Pressable
                     accessibilityRole="button"
+                    onPress={() => {
+                      toggleSettingsPanel();
+                      router.push("/change-password");
+                    }}
+                    style={[styles.heading, styles.cardHeaderTint]}
+                  >
+                    <View style={[styles.bell, styles.cardHeaderIcon]}>
+                      <Ionicons
+                        name="key"
+                        size={24}
+                        color={colors.primary}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cardTitle}>Đổi mật khẩu</Text>
+                      <Text style={styles.help}>
+                        Cập nhật mật khẩu mới & đăng xuất
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={20}
+                      color={colors.muted}
+                    />
+                  </Pressable>
+                </View>
+                <View style={styles.card}>
+                  <Pressable
+                    accessibilityRole="button"
                     accessibilityState={{ expanded: infoMenuOpen }}
                     onPress={() => setInfoMenuOpen((current) => !current)}
                     style={[styles.heading, styles.cardHeaderTint]}
@@ -580,8 +682,8 @@ export default function SettingsScreen() {
       <Modal
         animationType="fade"
         transparent
-        visible={nameEditorOpen}
-        onRequestClose={() => !savingName && setNameEditorOpen(false)}
+        visible={profileEditorOpen}
+        onRequestClose={() => !savingProfile && setProfileEditorOpen(false)}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -590,51 +692,139 @@ export default function SettingsScreen() {
         >
           <Pressable
             style={styles.modalBackdrop}
-            onPress={() => !savingName && setNameEditorOpen(false)}
+            onPress={() => !savingProfile && setProfileEditorOpen(false)}
           >
-            <Pressable style={styles.nameSheet} onPress={() => undefined}>
+            <Pressable style={styles.tagSheet} onPress={() => undefined}>
               <View style={styles.avatarSheetHeader}>
                 <View style={styles.avatarSheetCopy}>
-                  <Text style={styles.avatarSheetTitle}>Sửa tên hiển thị</Text>
+                  <Text style={styles.avatarSheetTitle}>Chỉnh sửa hồ sơ</Text>
                   <Text style={styles.avatarSheetHint}>
-                    Tên này sẽ xuất hiện trên hồ sơ và bảng xếp hạng.
+                    Cập nhật tên hiển thị, độ tuổi, sở thích và phong cách.
                   </Text>
                 </View>
                 <Pressable
-                  disabled={savingName}
+                  disabled={savingProfile}
                   hitSlop={8}
-                  onPress={() => setNameEditorOpen(false)}
+                  onPress={() => setProfileEditorOpen(false)}
                 >
                   <Ionicons name="close" size={25} color={colors.muted} />
                 </Pressable>
               </View>
-              <AppInput
-                autoCapitalize="words"
-                autoFocus
-                error={nameError}
-                label="Tên hiển thị"
-                maxLength={40}
-                onChangeText={(value) => {
-                  setDisplayName(value);
-                  if (nameError) setNameError("");
-                }}
-                onSubmitEditing={saveDisplayName}
-                returnKeyType="done"
-                value={displayName}
-              />
-              <View style={styles.nameActions}>
+
+              <ScrollView
+                style={styles.tagScrollView}
+                showsVerticalScrollIndicator={false}
+              >
+                <AppInput
+                  autoCapitalize="words"
+                  error={nameError}
+                  label="Tên hiển thị"
+                  maxLength={40}
+                  onChangeText={(value) => {
+                    setDisplayName(value);
+                    if (nameError) setNameError("");
+                  }}
+                  value={displayName}
+                />
+
+                <Text style={[styles.tagSectionTitle, { marginTop: 16 }]}>
+                  Tuổi / Nhóm tuổi
+                </Text>
+                <View style={styles.chipGroup}>
+                  {ageGroups.map((group) => {
+                    const selected = selectedAge === group.id;
+                    return (
+                      <Pressable
+                        key={group.id}
+                        onPress={() => setSelectedAge(group.id)}
+                        style={[
+                          styles.chip,
+                          selected && styles.chipSelected,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.chipText,
+                            selected && styles.chipTextSelected,
+                          ]}
+                        >
+                          {group.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Text style={[styles.tagSectionTitle, { marginTop: 16 }]}>
+                  Sở thích (Chọn nhiều)
+                </Text>
+                <View style={styles.chipGroup}>
+                  {interestOptions.map((item) => {
+                    const selected = selectedInterests.includes(item.id);
+                    return (
+                      <Pressable
+                        key={item.id}
+                        onPress={() => toggleInterest(item.id)}
+                        style={[
+                          styles.chip,
+                          selected && styles.chipSelected,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.chipText,
+                            selected && styles.chipTextSelected,
+                          ]}
+                        >
+                          {item.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Text style={[styles.tagSectionTitle, { marginTop: 16 }]}>
+                  Ngoại hình & Phong cách
+                </Text>
+                <View style={styles.chipGroup}>
+                  {styleOptions.map((style) => {
+                    const selected = selectedStyle === style.id;
+                    return (
+                      <Pressable
+                        key={style.id}
+                        onPress={() => setSelectedStyle(style.id)}
+                        style={[
+                          styles.chip,
+                          selected && styles.chipSelected,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.chipText,
+                            selected && styles.chipTextSelected,
+                          ]}
+                        >
+                          {style.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+
+              <View style={styles.tagActions}>
                 <AppButton
-                  disabled={savingName}
-                  onPress={() => setNameEditorOpen(false)}
+                  disabled={savingProfile}
+                  onPress={() => setProfileEditorOpen(false)}
                   style={styles.nameAction}
                   title="Hủy"
                   variant="ghost"
                 />
                 <AppButton
-                  loading={savingName}
-                  onPress={saveDisplayName}
+                  loading={savingProfile}
+                  onPress={saveProfile}
                   style={styles.nameAction}
-                  title="Lưu tên"
+                  title="Lưu hồ sơ"
                 />
               </View>
             </Pressable>
@@ -723,6 +913,23 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
       gap: 12,
     },
     profileHeaderCopy: { flex: 1 },
+    headerTagRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+      marginTop: 8,
+    },
+    headerTagBadge: {
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: 10,
+      backgroundColor: colors.primarySoft,
+    },
+    headerTagBadgeText: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: "800",
+    },
     settingsIcon: {
       width: 48,
       height: 48,
@@ -1004,4 +1211,37 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
       borderRadius: 17,
       backgroundColor: "rgba(0,0,0,0.42)",
     },
+    tagSheet: {
+      width: "100%",
+      maxWidth: 520,
+      maxHeight: "85%",
+      alignSelf: "center",
+      padding: 18,
+      borderRadius: 24,
+      backgroundColor: colors.surface,
+      ...shadows.card,
+    },
+    tagScrollView: { maxHeight: 380, marginVertical: 8 },
+    tagSectionTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      marginBottom: 8,
+    },
+    chipGroup: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    chip: {
+      paddingHorizontal: 13,
+      paddingVertical: 9,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+    },
+    chipSelected: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft,
+    },
+    chipText: { color: colors.muted, fontSize: 13, fontWeight: "700" },
+    chipTextSelected: { color: colors.primary, fontWeight: "900" },
+    tagActions: { flexDirection: "row", gap: 10, marginTop: 16 },
   });

@@ -110,7 +110,7 @@ export default function StatsScreen() {
       label: "Từ mới",
       value: stats.newAvailable ?? 0,
       filter: "new",
-      icon: "sparkles" as const,
+      icon: "book" as const,
       color: colors.primary,
       soft: colors.primarySoft,
     },

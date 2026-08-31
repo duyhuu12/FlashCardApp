@@ -13,10 +13,10 @@ import { useCallback, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 function learningStatus(progress: CardProgress | null, colors: AppColors) {
-  if (!progress?.lastReviewedAt) return { label: 'Chưa học', icon: 'sparkles-outline' as const, color: colors.primary, soft: colors.primarySoft };
-  if (progress.mastered) return { label: 'Đã thuộc', icon: 'checkmark-circle-outline' as const, color: colors.success, soft: colors.successSoft };
-  if (progress.lastRating === 'again' || progress.lastRating === 'hard') return { label: 'Từ khó', icon: 'alert-circle-outline' as const, color: colors.warning, soft: colors.warningSoft };
-  return { label: 'Đang học', icon: 'time-outline' as const, color: colors.primary, soft: colors.primarySoft };
+  if (!progress?.lastReviewedAt) return { label: 'Chưa học', icon: 'book-outline' as const, color: colors.primary, soft: colors.primarySoft };
+  if (progress.mastered) return { label: 'Đã thuộc', icon: 'ribbon-outline' as const, color: colors.success, soft: colors.successSoft };
+  if (progress.lastRating === 'again' || progress.lastRating === 'hard') return { label: 'Từ khó', icon: 'warning-outline' as const, color: colors.warning, soft: colors.warningSoft };
+  return { label: 'Đang học', icon: 'sync-outline' as const, color: colors.primary, soft: colors.primarySoft };
 }
 
 export default function WordDetailScreen() {
