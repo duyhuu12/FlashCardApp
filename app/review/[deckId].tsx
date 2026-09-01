@@ -9,20 +9,42 @@ import type { CardProgress, Deck, Flashcard, ReviewRating, ReviewSummary, StudyM
 import { friendlyError } from '@/src/utils/errors';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Dimensions, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Alert, Dimensions, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export default function ReviewScreen() {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
-  const { deckId, mode = 'daily' } = useLocalSearchParams<{ deckId: string; mode?: StudyMode }>(); const { user } = useAuth(); const router = useRouter();
+  const { deckId, mode = 'daily' } = useLocalSearchParams<{ deckId: string; mode?: StudyMode }>();
+  const { user } = useAuth(); const router = useRouter(); const navigation = useNavigation();
   const [deck, setDeck] = useState<Deck | null>(null); const [queue, setQueue] = useState<Flashcard[]>([]); const [progress, setProgress] = useState<Record<string, CardProgress>>({});
   const [index, setIndex] = useState(0); const [summary, setSummary] = useState<ReviewSummary>({ total: 0, again: 0, hard: 0, easy: 0 });
   const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [error, setError] = useState(''); const [flipped, setFlipped] = useState(false);
   const flip = useRef(new Animated.Value(0)).current; const position = useRef(new Animated.ValueXY()).current;
+  const finishedRef = useRef(false);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (finishedRef.current) return;
+      e.preventDefault();
+      Alert.alert(
+        'Rời khỏi phiên học?',
+        'Bạn có chắc chắn muốn dừng phiên học này không? Tiến trình chưa hoàn thành có thể chưa được lưu đầy đủ.',
+        [
+          { text: 'Học tiếp', style: 'cancel' },
+          {
+            text: 'Thoát',
+            style: 'destructive',
+            onPress: () => navigation.dispatch(e.data.action),
+          },
+        ],
+      );
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   const load = useCallback(async () => { if (!user) return; setLoading(true); setError(''); try { const nextDeck = await getDeck(deckId); if (!nextDeck) throw new Error('Không tìm thấy bộ từ.'); await ensureDeckProgress(user.uid, deckId, nextDeck.cardCount); const session = await getStudyQueue(user.uid, deckId, mode, 30); setDeck(nextDeck); setProgress(session.progress); setQueue(session.cards); setIndex(0); } catch (e) { setError(friendlyError(e)); } finally { setLoading(false); } }, [deckId, mode, user]);
   useEffect(() => { load(); }, [load]);
@@ -40,6 +62,7 @@ export default function ReviewScreen() {
       const nextProgress = await saveReview(user.uid, deckId, card.id, rating, progress[card.id]); setProgress((current) => ({ ...current, [card.id]: nextProgress }));
       const nextSummary = { ...summary, total: summary.total + 1, [rating]: summary[rating] + 1 }; setSummary(nextSummary);
       if (index + 1 >= queue.length) {
+        finishedRef.current = true;
         router.replace({ pathname: '/review/result', params: { deckId, deckTitle: deck?.title || 'Bộ từ', ...Object.fromEntries(Object.entries(nextSummary).map(([key, value]) => [key, String(value)])) } });
       }
       else { setIndex((value) => value + 1); setFlipped(false); flip.setValue(0); position.setValue({ x: 0, y: 0 }); }
@@ -51,10 +74,13 @@ export default function ReviewScreen() {
 
   if (loading) return <AppScreen><LoadingView message="Đang chuẩn bị phiên học cá nhân hóa..." /></AppScreen>;
   if (error && queue.length === 0) return <AppScreen><ErrorView message={error} onRetry={load} /></AppScreen>;
-  if (queue.length === 0) return <AppScreen><EmptyView title="Không có thẻ phù hợp" message="Hãy chọn phiên học khác hoặc quay lại lộ trình." actionTitle="Về trang chủ" onAction={() => router.replace('/(tabs)')} /></AppScreen>;
+  if (queue.length === 0) return <AppScreen><EmptyView title="Không có thẻ phù hợp" message="Hãy chọn phiên học khác hoặc quay lại lộ trình." actionTitle="Về trang chủ" onAction={() => { finishedRef.current = true; router.replace('/(tabs)'); }} /></AppScreen>;
   const card = queue[index];
   return <AppScreen scroll={false} contentStyle={styles.screen}>
-    <View style={styles.progressRow}><Text style={styles.deckName} numberOfLines={1}>{deck?.title}</Text><Text style={styles.counter}>{index + 1}/{queue.length}</Text></View>
+    <View style={styles.progressRow}>
+      <Text style={styles.deckName} numberOfLines={1}>{deck?.title}</Text>
+      <Text style={styles.counter}>{index + 1}/{queue.length}</Text>
+    </View>
     <View style={styles.track}><View style={[styles.fill, { width: `${((index + 1) / queue.length) * 100}%` }]} /></View>
     <Animated.View {...panResponder.panHandlers} style={[styles.cardArea, { transform: position.getTranslateTransform() }]}>
       <Pressable onPress={toggleFlip} style={styles.pressable}>

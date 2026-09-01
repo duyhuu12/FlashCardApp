@@ -1,10 +1,4 @@
 import {
-  GoogleSignin,
-  isErrorWithCode,
-  isSuccessResponse,
-  statusCodes,
-} from '@react-native-google-signin/google-signin';
-import {
   GoogleAuthProvider,
   signInWithCredential,
   signInWithPopup,
@@ -14,9 +8,35 @@ import { Platform } from 'react-native';
 
 const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim();
 
-if (Platform.OS !== 'web' && webClientId) {
-  GoogleSignin.configure({ webClientId });
-}
+const getGoogleSignin = async () => {
+  if (Platform.OS === 'web') return null;
+
+  try {
+    const GoogleSigninModule = await import('@react-native-google-signin/google-signin');
+    const GoogleSignin = GoogleSigninModule.GoogleSignin ?? GoogleSigninModule;
+    if (!GoogleSignin) return null;
+
+    if (webClientId) {
+      GoogleSignin.configure?.({ webClientId });
+    }
+
+    return GoogleSignin;
+  } catch {
+    return null;
+  }
+};
+
+const isErrorWithCode = (error: unknown): error is { code: string } =>
+  typeof error === 'object' && error !== null && 'code' in error;
+
+const isSuccessResponse = (response: unknown): response is { data: { idToken?: string } } =>
+  typeof response === 'object' && response !== null && 'data' in response;
+
+const statusCodes = {
+  SIGN_IN_CANCELLED: '12501',
+  IN_PROGRESS: '10',
+  PLAY_SERVICES_NOT_AVAILABLE: '11',
+};
 
 function codedError(code: string, message: string) {
   return Object.assign(new Error(message), { code });
@@ -43,6 +63,14 @@ export async function signInWithGoogle(auth: Auth): Promise<boolean> {
       }
       throw error;
     }
+  }
+
+  const GoogleSignin = await getGoogleSignin();
+  if (!GoogleSignin) {
+    throw codedError(
+      'auth/google-signin-not-configured',
+      'Google Sign-In native chưa được kích hoạt cho app này. Hãy rebuild native app hoặc tắt tính năng Google Login khi chạy trên Expo Go.',
+    );
   }
 
   try {
@@ -80,8 +108,13 @@ export async function signInWithGoogle(auth: Auth): Promise<boolean> {
 
 export async function signOutGoogleSession() {
   if (Platform.OS === 'web') return;
+
   try {
-    if (GoogleSignin.getCurrentUser()) await GoogleSignin.signOut();
+    const GoogleSignin = await getGoogleSignin();
+    if (GoogleSignin?.getCurrentUser) {
+      const currentUser = GoogleSignin.getCurrentUser();
+      if (currentUser) await GoogleSignin.signOut();
+    }
   } catch {
     // Firebase sign-out must still complete if the Google SDK has no active session.
   }

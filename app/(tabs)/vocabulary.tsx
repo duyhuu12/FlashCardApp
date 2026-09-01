@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -206,12 +207,18 @@ export default function VocabularyScreen() {
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [selectedPracticeDeckId, setSelectedPracticeDeckId] = useState<string | null>(null);
+  const [topicPickerVisible, setTopicPickerVisible] = useState(false);
   const categories = useMemo(
     () => (user ? listBuiltInCategories(user.uid) : []),
     [user],
   );
   const practiceDeck = useMemo(() => {
     const decks = categories.flatMap((category) => category.topics);
+    if (selectedPracticeDeckId) {
+      const found = decks.find((deck) => deck.id === selectedPracticeDeckId);
+      if (found) return found;
+    }
     const reviewedByDeck = new Map<string, number>();
     progressItems.forEach((progress) => {
       if (!progress.lastReviewedAt) return;
@@ -227,7 +234,7 @@ export default function VocabularyScreen() {
       decks[0] ??
       null
     );
-  }, [categories, progressItems]);
+  }, [categories, progressItems, selectedPracticeDeckId]);
   const normalizedQuery = "";
   const progressByCardId = useMemo(
     () => new Map(progressItems.map((progress) => [progress.cardId, progress])),
@@ -1304,7 +1311,7 @@ export default function VocabularyScreen() {
                             },
                           ]}
                         >
-                          <Ionicons name="layers" size={23} color="#fff" />
+                          <Ionicons name="book" size={22} color="#fff" />
                         </View>
                         <View style={styles.personalDeckCopy}>
                           <Text
@@ -1342,7 +1349,21 @@ export default function VocabularyScreen() {
                 <Ionicons name="school" size={28} color="#fff" />
               </View>
               <View style={styles.practiceHeroCopy}>
-                <Text style={styles.practiceEyebrow}>BÀI ĐANG CHỌN</Text>
+                <View style={styles.practiceHeroHeaderRow}>
+                  <Text style={styles.practiceEyebrow}>BÀI ĐANG CHỌN</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Đổi chủ đề muốn ôn tập"
+                    onPress={() => setTopicPickerVisible(true)}
+                    style={({ pressed }) => [
+                      styles.changeTopicBadge,
+                      pressed && { opacity: 0.75 },
+                    ]}
+                  >
+                    <Ionicons name="swap-horizontal" size={13} color="#fff" />
+                    <Text style={styles.changeTopicBadgeText}>Đổi chủ đề</Text>
+                  </Pressable>
+                </View>
                 <Text numberOfLines={2} style={styles.practiceHeroTitle}>
                   {practiceDeck?.title ?? "Chưa có bài học"}
                 </Text>
@@ -1471,6 +1492,151 @@ export default function VocabularyScreen() {
               ))}
             </View>
           </View>
+
+          <Modal
+            visible={topicPickerVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setTopicPickerVisible(false)}
+          >
+            <Pressable
+              style={styles.modalBackdrop}
+              onPress={() => setTopicPickerVisible(false)}
+            >
+              <Pressable
+                style={[
+                  styles.topicPickerSheet,
+                  { paddingBottom: Math.max(28, 16 + insets.bottom) },
+                ]}
+                onPress={() => undefined}
+              >
+                <View style={styles.topicPickerHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.topicPickerTitle}>Chọn chủ đề ôn tập</Text>
+                    <Text style={styles.topicPickerHint}>
+                      Chỉ hiển thị các bài học bạn đã học hoặc hoàn thành.
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Đóng danh sách chủ đề"
+                    hitSlop={8}
+                    onPress={() => setTopicPickerVisible(false)}
+                  >
+                    <Ionicons name="close" size={26} color={colors.muted} />
+                  </Pressable>
+                </View>
+                <ScrollView
+                  style={{ flexGrow: 0, maxHeight: 420 }}
+                  contentContainerStyle={{ gap: 8, paddingBottom: 8 }}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {(() => {
+                    const learnedTopics = categories
+                      .flatMap((cat) => cat.topics)
+                      .filter((topic) => {
+                        const reviewedCount = progressItems.filter(
+                          (p) => p.deckId === topic.id && p.lastReviewedAt,
+                        ).length;
+                        return reviewedCount > 0;
+                      });
+
+                    if (learnedTopics.length === 0) {
+                      return (
+                        <View style={{ padding: 24, alignItems: "center", gap: 10 }}>
+                          <Ionicons
+                            name="book-outline"
+                            size={42}
+                            color={colors.muted}
+                          />
+                          <Text
+                            style={{
+                              color: colors.text,
+                              fontWeight: "900",
+                              fontSize: 16,
+                              textAlign: "center",
+                            }}
+                          >
+                            Chưa có bài học nào được hoàn thành
+                          </Text>
+                          <Text
+                            style={{
+                              color: colors.muted,
+                              fontSize: 13,
+                              textAlign: "center",
+                            }}
+                          >
+                            Hãy hoàn thành bài học đầu tiên trên Lộ trình để mở tính năng ôn lại chủ đề đã học.
+                          </Text>
+                        </View>
+                      );
+                    }
+
+                    return learnedTopics.map((topic) => {
+                      const isSelected = topic.id === practiceDeck?.id;
+                      const stats = progressItems.reduce(
+                        (acc, p) => {
+                          if (p.deckId === topic.id && p.lastReviewedAt) {
+                            acc.reviewed += 1;
+                            if (p.mastered) acc.mastered += 1;
+                          }
+                          return acc;
+                        },
+                        { reviewed: 0, mastered: 0 },
+                      );
+                      const isCompleted =
+                        stats.reviewed >= topic.cardCount && topic.cardCount > 0;
+                      return (
+                        <Pressable
+                          key={topic.id}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: isSelected }}
+                          onPress={() => {
+                            setSelectedPracticeDeckId(topic.id);
+                            setTopicPickerVisible(false);
+                          }}
+                          style={({ pressed }) => [
+                            styles.topicPickerItem,
+                            isSelected && styles.topicPickerItemSelected,
+                            pressed && styles.resultRowPressed,
+                          ]}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[
+                                styles.topicPickerItemTitle,
+                                isSelected && { color: colors.primary },
+                              ]}
+                            >
+                              Bài {topic.pathOrder} · {topic.topic}
+                            </Text>
+                            <Text style={styles.topicPickerItemMeta}>
+                              {topic.cardCount} từ · {stats.reviewed} đã học ·{" "}
+                              {stats.mastered} đã thuộc
+                              {isCompleted ? " · ✓ Đã hoàn thành" : ""}
+                            </Text>
+                          </View>
+                          {isSelected ? (
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={24}
+                              color={colors.primary}
+                            />
+                          ) : (
+                            <Ionicons
+                              name="chevron-forward"
+                              size={20}
+                              color={colors.muted}
+                            />
+                          )}
+                        </Pressable>
+                      );
+                    });
+                  })()}
+                </ScrollView>
+              </Pressable>
+            </Pressable>
+          </Modal>
         </View>
       )}
     </AppScreen>
@@ -2169,5 +2335,81 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
       fontSize: 11,
       lineHeight: 16,
       marginTop: 4,
+    },
+    practiceHeroHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    changeTopicBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: 12,
+      backgroundColor: "rgba(255, 255, 255, 0.22)",
+      borderWidth: 1,
+      borderColor: "rgba(255, 255, 255, 0.35)",
+    },
+    changeTopicBadgeText: {
+      color: "#FFFFFF",
+      fontSize: 11,
+      fontWeight: "900",
+    },
+    modalBackdrop: {
+      flex: 1,
+      justifyContent: "flex-end",
+      backgroundColor: "rgba(6, 52, 73, 0.44)",
+    },
+    topicPickerSheet: {
+      maxHeight: "82%",
+      padding: 20,
+      paddingBottom: 28,
+      gap: 16,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      backgroundColor: colors.surface,
+    },
+    topicPickerHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    topicPickerTitle: {
+      color: colors.text,
+      fontSize: 21,
+      fontWeight: "900",
+    },
+    topicPickerHint: {
+      color: colors.muted,
+      fontSize: 13,
+      marginTop: 3,
+    },
+    topicPickerItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderRadius: 16,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+    },
+    topicPickerItemSelected: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft,
+    },
+    topicPickerItemTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: "900",
+    },
+    topicPickerItemMeta: {
+      color: colors.muted,
+      fontSize: 12,
+      marginTop: 2,
     },
   });

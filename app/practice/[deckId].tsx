@@ -9,9 +9,9 @@ import { useAppTheme, useThemedStyles, type AppColors, type AppShadows } from '@
 import type { CardProgress, Flashcard } from '@/src/types/models';
 import { friendlyError } from '@/src/utils/errors';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 type PracticeMode = 'quiz' | 'match' | 'write' | 'gold';
 
@@ -33,13 +33,34 @@ export default function PracticeScreen() {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const { deckId, mode = 'quiz' } = useLocalSearchParams<{ deckId: string; mode?: PracticeMode }>();
-  const { user } = useAuth(); const router = useRouter();
+  const { user } = useAuth(); const router = useRouter(); const navigation = useNavigation();
   const [cards, setCards] = useState<Flashcard[]>([]); const [progress, setProgress] = useState<Record<string, CardProgress>>({});
   const [index, setIndex] = useState(0); const [score, setScore] = useState(0); const [answer, setAnswer] = useState(''); const [feedback, setFeedback] = useState('');
   const [selectedTerm, setSelectedTerm] = useState(''); const [selectedOptionId, setSelectedOptionId] = useState(''); const [matched, setMatched] = useState<string[]>([]);
   const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [error, setError] = useState(''); const [title, setTitle] = useState('');
   const autoAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { playAnswerFeedback, playCompletionFeedback } = useAnswerFeedback();
+  const finishedRef = useRef(false);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (finishedRef.current) return;
+      e.preventDefault();
+      Alert.alert(
+        'Dừng bài luyện tập?',
+        'Bạn có chắc chắn muốn rời khỏi bài luyện tập này không?',
+        [
+          { text: 'Luyện tiếp', style: 'cancel' },
+          {
+            text: 'Thoát',
+            style: 'destructive',
+            onPress: () => navigation.dispatch(e.data.action),
+          },
+        ],
+      );
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   const load = useCallback(async () => {
     if (!user) return; setLoading(true); setError('');
@@ -67,6 +88,7 @@ export default function PracticeScreen() {
   const finished = mode === 'match' ? matchCards.length > 0 && matched.length === matchCards.length : cards.length > 0 && index >= cards.length;
   useEffect(() => {
     if (!finished) return;
+    finishedRef.current = true;
     const timer = setTimeout(playCompletionFeedback, 450);
     return () => clearTimeout(timer);
   }, [finished, playCompletionFeedback]);
@@ -132,7 +154,13 @@ export default function PracticeScreen() {
   if (finished) return <AppScreen contentStyle={styles.result}><View style={styles.resultIcon}><Ionicons name="trophy" size={48} color={colors.warning} /></View><Text style={styles.resultTitle}>{mode === 'gold' ? 'Đã nâng cấp Gold!' : 'Hoàn thành!'}</Text><Text style={styles.resultScore}>{score}/{mode === 'match' ? matchCards.length : cards.length} câu đúng</Text><AppButton title="Về lộ trình" onPress={() => router.replace('/(tabs)')} /><AppButton title={mode === 'gold' ? 'Làm lại thử thách' : 'Luyện lại'} variant="secondary" onPress={() => { setIndex(0); setScore(0); setMatched([]); setSelectedOptionId(''); setFeedback(''); setAnswer(''); setCards(shuffled(cards)); }} /></AppScreen>;
 
   return <AppScreen contentStyle={styles.screen}>
-    <View style={styles.header}><View><Text style={styles.mode}>{mode === 'quiz' ? 'TRẮC NGHIỆM' : mode === 'write' ? 'NHẬP TỪ' : mode === 'gold' ? 'THỬ THÁCH GOLD' : 'GHÉP CẶP'}</Text><Text style={styles.title} numberOfLines={1}>{title}</Text></View><Text style={styles.score}>{score} điểm</Text></View>
+    <View style={styles.header}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.mode}>{mode === 'quiz' ? 'TRẮC NGHIỆM' : mode === 'write' ? 'NHẬP TỪ' : mode === 'gold' ? 'THỬ THÁCH GOLD' : 'GHÉP CẶP'}</Text>
+        <Text style={styles.title} numberOfLines={1}>{title}</Text>
+      </View>
+      <Text style={styles.score}>{score} điểm</Text>
+    </View>
     {mode !== 'match' ? <><View style={styles.track}><View style={[styles.fill, { width: `${(index / cards.length) * 100}%` }]} /></View><View style={[styles.question, mode === 'gold' && styles.goldQuestion]}><Text style={styles.questionHint}>{mode === 'write' ? 'Nhập từ tiếng Anh tương ứng' : mode === 'gold' ? 'CHỌN TỪ ĐIỀN VÀO Ô TRỐNG' : 'Chọn nghĩa đúng'}</Text>{mode !== 'gold' ? <Pressable accessibilityRole="button" accessibilityLabel={`Phát âm ${current?.term ?? ''}`} onPress={() => current && speakEnglish(current.term).catch(() => undefined)} style={styles.speakerButton}><Ionicons name="volume-high" size={25} color={colors.primary} /></Pressable> : <View style={styles.goldQuestionIcon}><Ionicons name="create" size={25} color="#8A5900" /></View>}<Text style={[styles.questionText, mode === 'gold' && styles.goldQuestionText]}>{mode === 'write' ? current?.meaning : mode === 'gold' ? clozeQuestion : current?.term}</Text>{current?.pronunciation && mode === 'quiz' ? <Text style={styles.pronunciation}>/{current.pronunciation}/</Text> : null}</View>
       {mode === 'quiz' || mode === 'gold' ? <View style={styles.options}>{options.map((option) => { const isCorrectAnswer = Boolean(feedback) && option.id === current?.id; const isWrongAnswer = Boolean(feedback) && option.id === selectedOptionId && option.id !== current?.id; return <Pressable key={option.id} disabled={Boolean(feedback)} onPress={() => choose(option)} style={[styles.option, isCorrectAnswer && styles.optionCorrect, isWrongAnswer && styles.optionWrong]}><Text style={[styles.optionText, isCorrectAnswer && styles.optionTextCorrect, isWrongAnswer && styles.optionTextWrong]}>{mode === 'gold' ? option.term : option.meaning}</Text></Pressable>; })}</View> : <View style={styles.writeBox}><TextInput value={answer} onChangeText={setAnswer} onSubmitEditing={submitWrite} autoCapitalize="none" blurOnSubmit={false} placeholder="Nhập từ tiếng Anh..." placeholderTextColor={colors.muted} style={styles.input} /><AppButton title="Kiểm tra" onPress={submitWrite} disabled={!answer.trim() || saving || Boolean(feedback)} /></View>}
       {feedback ? <View style={mode === 'quiz' || mode === 'gold' ? undefined : [styles.feedback, feedback === 'Chính xác!' ? styles.feedbackGood : styles.feedbackBad]}>{mode !== 'quiz' && mode !== 'gold' ? <Text style={styles.feedbackText}>{feedback}</Text> : null}{mode === 'write' && feedback === 'Chính xác!' && !error ? <Text style={styles.autoAdvanceText}>Đang chuyển sang từ tiếp theo...</Text> : <AppButton title={mode === 'quiz' || mode === 'gold' ? 'Tiếp theo' : 'Tiếp tục'} onPress={next} loading={mode === 'gold' && saving} disabled={saving} />}</View> : null}</> : <>

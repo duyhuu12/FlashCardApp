@@ -1,5 +1,6 @@
 import { AppScreen } from "@/src/components/AppScreen";
 import { EmptyView, ErrorView, LoadingView } from "@/src/components/StateView";
+import { WaterWaveNode } from "@/src/components/WaterWaveNode";
 import { getAvatarSource } from "@/src/constants/avatarOptions";
 import { useAuth } from "@/src/context/AuthContext";
 import {
@@ -256,7 +257,7 @@ export default function HomeScreen() {
     if (index <= 0) return true;
     const previous = pathDecks[index - 1];
     const reviewed = deckStates[previous.id]?.reviewedCardCount ?? 0;
-    return previous.cardCount > 0 && reviewed / previous.cardCount >= 0.8;
+    return previous.cardCount > 0 && reviewed / previous.cardCount >= 1.0;
   }
 
   const renderTopBar = () => (
@@ -289,7 +290,7 @@ export default function HomeScreen() {
     pathDecks.find((deck) => {
       const reviewed = deckStates[deck.id]?.reviewedCardCount ?? 0;
       const completion = deck.cardCount ? reviewed / deck.cardCount : 0;
-      return deck.cardCount > 0 && isUnlocked(deck) && completion < 0.8;
+      return deck.cardCount > 0 && isUnlocked(deck) && completion < 1.0;
     }) ?? pathDecks[0];
   const selectedDeckState = selectedDeck
     ? deckStates[selectedDeck.id]
@@ -304,7 +305,7 @@ export default function HomeScreen() {
         ),
       )
     : 0;
-  const selectedDeckCompleted = selectedDeckPercent >= 80;
+  const selectedDeckCompleted = selectedDeckPercent >= 100;
   const selectedDeckGold = Boolean(selectedDeckState?.goldCompletedAt);
 
   return (
@@ -427,7 +428,7 @@ export default function HomeScreen() {
             const lessonPercent = deck.cardCount
               ? Math.min(100, Math.round((reviewed / deck.cardCount) * 100))
               : 0;
-            const completed = lessonPercent >= 80;
+            const completed = lessonPercent >= 100;
             const gold = Boolean(deckStates[deck.id]?.goldCompletedAt);
             const active = activeDeck?.id === deck.id;
             const previousDeck = pathDecks[index - 1];
@@ -525,30 +526,24 @@ export default function HomeScreen() {
                         ]}
                       />
                     ) : null}
-                    <View
-                      style={[
-                        styles.nodeShadow,
-                        {
-                          backgroundColor: completed
-                            ? gold
-                              ? "#BE7D09"
-                              : colors.success
-                            : unlocked
-                              ? sectionPalette.dark
-                              : colors.border,
-                        },
-                      ]}
-                    >
-                      <View
-                        style={[styles.node, { backgroundColor: nodeColor }]}
-                      >
-                        <Ionicons
-                          name={nodeIcon}
-                          size={checkpoint ? 31 : 29}
-                          color="#fff"
-                        />
-                      </View>
-                    </View>
+                    <WaterWaveNode
+                      percent={lessonPercent}
+                      nodeColor={nodeColor}
+                      shadowColor={
+                        completed
+                          ? gold
+                            ? "#BE7D09"
+                            : colors.success
+                          : unlocked
+                            ? sectionPalette.dark
+                            : colors.border
+                      }
+                      iconName={nodeIcon}
+                      isUnlocked={unlocked}
+                      isCheckpoint={checkpoint}
+                      isActive={active}
+                      isCompleted={completed}
+                    />
                     {gold ? (
                       <View style={styles.goldBadge}>
                         <Text style={styles.goldBadgeText}>GOLD</Text>
@@ -572,9 +567,7 @@ export default function HomeScreen() {
                     >
                       Bài {deck.pathOrder} · {deck.topic}
                     </Text>
-                    <Text style={styles.nodeMeta}>
-                      {deck.cardCount} từ · {lessonPercent}%
-                    </Text>
+                    <Text style={styles.nodeMeta}>{deck.cardCount} từ</Text>
                   </Pressable>
                 </View>
               </View>
@@ -597,7 +590,13 @@ export default function HomeScreen() {
           style={styles.modalBackdrop}
           onPress={() => setSelectedDeck(null)}
         >
-          <Pressable style={styles.lessonSheet} onPress={() => undefined}>
+          <Pressable
+            style={[
+              styles.lessonSheet,
+              { paddingBottom: Math.max(32, 16 + insets.bottom) },
+            ]}
+            onPress={() => undefined}
+          >
             {selectedDeck ? (
               <>
                 <View style={styles.sheetHeader}>
@@ -678,11 +677,18 @@ export default function HomeScreen() {
                       });
                     }}
                   >
-                    <Ionicons name="play" size={20} color="#fff" />
+                    <Ionicons
+                      name={selectedDeckCompleted ? "refresh" : "play"}
+                      size={20}
+                      color="#fff"
+                    />
                     <Text style={styles.primaryActionText}>
-                      {(deckStates[selectedDeck.id]?.reviewedCardCount ?? 0) > 0
-                        ? "Tiếp tục học"
-                        : "Bắt đầu học"}
+                      {selectedDeckCompleted
+                        ? "Ôn tập lại"
+                        : (deckStates[selectedDeck.id]?.reviewedCardCount ??
+                              0) > 0
+                          ? "Tiếp tục học"
+                          : "Bắt đầu học"}
                     </Text>
                   </Pressable>
                   <Pressable
@@ -711,15 +717,15 @@ export default function HomeScreen() {
           onPress={() => setSectionPickerVisible(false)}
         >
           <Pressable
-            style={styles.sectionPickerSheet}
+            style={[
+              styles.sectionPickerSheet,
+              { paddingBottom: Math.max(28, 16 + insets.bottom) },
+            ]}
             onPress={() => undefined}
           >
             <View style={styles.sectionPickerHeader}>
               <View>
                 <Text style={styles.sectionPickerTitle}>Chọn phần học</Text>
-                <Text style={styles.sectionPickerHint}>
-                  Chuyển nhanh đến nhóm chủ đề bạn muốn học.
-                </Text>
               </View>
               <Pressable
                 accessibilityRole="button"
@@ -751,10 +757,11 @@ export default function HomeScreen() {
                       {
                         borderColor: selected
                           ? sectionPalette.main
-                          : `${sectionPalette.main}55`,
+                          : `${sectionPalette.main}30`,
                         backgroundColor: selected
-                          ? `${sectionPalette.main}1F`
-                          : colors.background,
+                          ? `${sectionPalette.main}38`
+                          : `${sectionPalette.main}12`,
+                        borderWidth: selected ? 2.5 : 1,
                       },
                       pressed && styles.stopPressed,
                     ]}
@@ -763,17 +770,17 @@ export default function HomeScreen() {
                       <Text
                         style={[
                           styles.sectionPickerItemTitle,
-                          { color: sectionPalette.main },
+                          {
+                            color: sectionPalette.main,
+                            fontSize: 15,
+                            fontWeight: selected ? "900" : "800",
+                            opacity: selected ? 1 : 0.85,
+                          },
                         ]}
                       >
                         {section.categoryTitle}
                       </Text>
                     </View>
-                    <Ionicons
-                      name={selected ? "checkmark-circle" : "chevron-forward"}
-                      size={23}
-                      color={selected ? sectionPalette.main : colors.muted}
-                    />
                   </Pressable>
                 );
               })}

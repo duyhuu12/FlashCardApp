@@ -46,7 +46,12 @@ interface ProgressMemoryEntry {
 }
 
 const progressMemoryCache = new Map<string, ProgressMemoryEntry>();
-const authorNameCache = new Map<string, string>();
+interface AuthorCacheEntry {
+  name: string;
+  avatarId: string;
+}
+
+const authorCache = new Map<string, AuthorCacheEntry>();
 const ownedDeckRequests = new Map<string, Promise<Deck[]>>();
 
 function cacheProgress(uid: string, items: CardProgress[], fetchedAt = Date.now()) {
@@ -125,7 +130,7 @@ export async function listPublicDecks(uid: string) {
   const snapshot = await getDocs(query(collection(db, 'decks'), where('isPublic', '==', true), limit(30)));
   const decks = snapshot.docs.map((item) => withId<Deck>(item)).filter((deck) => deck.ownerId !== uid);
   const missingOwnerIds = [...new Set(decks.map((deck) => deck.ownerId))]
-    .filter((ownerId) => !authorNameCache.has(ownerId));
+    .filter((ownerId) => !authorCache.has(ownerId));
   for (let index = 0; index < missingOwnerIds.length; index += 10) {
     const ownerIds = missingOwnerIds.slice(index, index + 10);
     const authors = await getDocs(query(
@@ -133,16 +138,26 @@ export async function listPublicDecks(uid: string) {
       where(documentId(), 'in', ownerIds),
     ));
     authors.docs.forEach((item) => {
-      authorNameCache.set(item.id, String(item.data().displayName || 'Người học'));
+      const data = item.data();
+      authorCache.set(item.id, {
+        name: String(data.displayName || 'Người học'),
+        avatarId: String(data.avatarId || 'avt1'),
+      });
     });
     ownerIds.forEach((ownerId) => {
-      if (!authorNameCache.has(ownerId)) authorNameCache.set(ownerId, 'Người học');
+      if (!authorCache.has(ownerId)) {
+        authorCache.set(ownerId, { name: 'Người học', avatarId: 'avt1' });
+      }
     });
   }
-  return decks.map((deck) => ({
-    ...deck,
-    authorName: authorNameCache.get(deck.ownerId) ?? 'Người học',
-  }));
+  return decks.map((deck) => {
+    const author = authorCache.get(deck.ownerId);
+    return {
+      ...deck,
+      authorName: author?.name ?? 'Người học',
+      authorAvatarId: author?.avatarId ?? 'avt1',
+    };
+  });
 }
 
 export async function getDeck(deckId: string) {
@@ -152,11 +167,20 @@ export async function getDeck(deckId: string) {
   if (!snapshot.exists()) return null;
   const deck = withId<Deck>(snapshot);
   if (!deck.isPublic) return deck;
-  if (!authorNameCache.has(deck.ownerId)) {
+  if (!authorCache.has(deck.ownerId)) {
     const author = await getDoc(doc(db, 'leaderboard', deck.ownerId));
-    authorNameCache.set(deck.ownerId, String(author.data()?.displayName || 'Người học'));
+    const data = author.data();
+    authorCache.set(deck.ownerId, {
+      name: String(data?.displayName || 'Người học'),
+      avatarId: String(data?.avatarId || 'avt1'),
+    });
   }
-  return { ...deck, authorName: authorNameCache.get(deck.ownerId) };
+  const author = authorCache.get(deck.ownerId);
+  return {
+    ...deck,
+    authorName: author?.name ?? 'Người học',
+    authorAvatarId: author?.avatarId ?? 'avt1',
+  };
 }
 
 export async function getDeckFromCache(deckId: string) {
@@ -166,8 +190,9 @@ export async function getDeckFromCache(deckId: string) {
     const snapshot = await getDocFromCache(doc(db, 'decks', deckId));
     if (!snapshot.exists()) return null;
     const deck = withId<Deck>(snapshot);
-    return deck.isPublic && authorNameCache.has(deck.ownerId)
-      ? { ...deck, authorName: authorNameCache.get(deck.ownerId) }
+    const author = authorCache.get(deck.ownerId);
+    return deck.isPublic && author
+      ? { ...deck, authorName: author.name, authorAvatarId: author.avatarId }
       : deck;
   } catch {
     return null;
@@ -506,7 +531,9 @@ export async function getStudyQueue(
     append(hard, 5);
     append(due, 15);
     append(unseen, pageSize - selected.length);
-    if (selected.length < pageSize) append(reviewed, pageSize - selected.length);
+    if (unseen.length === 0 && selected.length < pageSize) {
+      append(reviewed, pageSize - selected.length);
+    }
   }
 
   return {

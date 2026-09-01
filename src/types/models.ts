@@ -21,6 +21,7 @@ export interface Deck {
   id: string;
   ownerId: string;
   authorName?: string;
+  authorAvatarId?: string;
   title: string;
   description: string;
   topic: string;

@@ -19,11 +19,18 @@ import { friendlyError } from "@/src/utils/errors";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type ExploreSection = "mine" | "community";
+type SortMode = "newest" | "most_cards";
 
 function personalOnly(decks: Deck[]) {
   return decks.filter((deck) => deck.pathId !== BUILT_IN_PATH_ID);
@@ -42,6 +49,16 @@ export default function CommunityScreen() {
   const [error, setError] = useState("");
   const [tabsPinned, setTabsPinned] = useState(false);
   const tabsTopRef = useRef(Number.POSITIVE_INFINITY);
+
+  // Search & Sort states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortMode, setSortMode] = useState<SortMode>("newest");
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+
+  const sortOptions: { id: SortMode; label: string; icon: "time" | "library" }[] = [
+    { id: "newest", label: "Mới nhất", icon: "time" },
+    { id: "most_cards", label: "Nhiều thẻ nhất", icon: "library" },
+  ];
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -68,6 +85,39 @@ export default function CommunityScreen() {
       load();
     }, [load]),
   );
+
+  // Filtered + sorted community decks
+  const filteredCommunityDecks = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    let result = q
+      ? communityDecks.filter(
+          (deck) =>
+            deck.title.toLowerCase().includes(q) ||
+            deck.description?.toLowerCase().includes(q) ||
+            deck.topic?.toLowerCase().includes(q),
+        )
+      : [...communityDecks];
+
+    if (sortMode === "newest") {
+      result.sort((a, b) => {
+        const aTime = a.createdAt
+          ? typeof (a.createdAt as any).toMillis === "function"
+            ? (a.createdAt as any).toMillis()
+            : new Date(a.createdAt as any).getTime()
+          : 0;
+        const bTime = b.createdAt
+          ? typeof (b.createdAt as any).toMillis === "function"
+            ? (b.createdAt as any).toMillis()
+            : new Date(b.createdAt as any).getTime()
+          : 0;
+        return bTime - aTime;
+      });
+    } else if (sortMode === "most_cards") {
+      result.sort((a, b) => (b.cardCount ?? 0) - (a.cardCount ?? 0));
+    }
+
+    return result;
+  }, [communityDecks, searchQuery, sortMode]);
 
   const renderTabs = (pinned = false) => (
     <View
@@ -213,21 +263,113 @@ export default function CommunityScreen() {
         />
       ) : (
         <View style={styles.sectionContent}>
-          <View style={styles.sectionHeadingCopy}>
-            <Text style={styles.sectionTitle}>Bộ từ cộng đồng</Text>
-            <Text style={styles.sectionHint}>
-              Chạm vào một bộ từ để xem chi tiết và sao chép.
+          <View style={styles.sectionHeadingRow}>
+            <View style={styles.sectionHeadingCopy}>
+              <Text style={styles.sectionTitle}>Bộ từ cộng đồng</Text>
+              <Text style={styles.sectionHint}>
+                {filteredCommunityDecks.length}/{communityDecks.length} bộ từ
+              </Text>
+            </View>
+          </View>
+
+          {/* Search Bar */}
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={19} color={colors.muted} />
+            <TextInput
+              accessibilityLabel="Tìm kiếm bộ từ cộng đồng"
+              placeholder="Tìm kiếm tên, chủ đề..."
+              placeholderTextColor={colors.muted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              style={styles.searchInput}
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+            {searchQuery.length > 0 ? (
+              <Pressable hitSlop={8} onPress={() => setSearchQuery("")}>
+                <Ionicons name="close-circle" size={18} color={colors.muted} />
+              </Pressable>
+            ) : null}
+          </View>
+
+          {/* Sort Button */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: sortMenuOpen }}
+            onPress={() => setSortMenuOpen((v) => !v)}
+            style={styles.sortSelect}
+          >
+            <Ionicons name="swap-vertical" size={18} color={colors.primary} />
+            <Text style={styles.sortSelectText}>Sắp xếp</Text>
+            <Text style={styles.sortValue}>
+              {sortOptions.find((o) => o.id === sortMode)?.label}
             </Text>
-          </View>
-          <View style={styles.list}>
-            {communityDecks.map((deck) => (
-              <DeckCard
-                key={deck.id}
-                deck={deck}
-                onPress={() => router.push(`/deck/${deck.id}`)}
-              />
-            ))}
-          </View>
+            <Ionicons
+              name={sortMenuOpen ? "chevron-up" : "chevron-down"}
+              size={17}
+              color={colors.muted}
+            />
+          </Pressable>
+
+          {sortMenuOpen ? (
+            <View style={styles.sortMenu}>
+              {sortOptions.map((option) => {
+                const selected = option.id === sortMode;
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    key={option.id}
+                    onPress={() => {
+                      setSortMode(option.id);
+                      setSortMenuOpen(false);
+                    }}
+                    style={[
+                      styles.sortOption,
+                      selected && styles.sortOptionSelected,
+                    ]}
+                  >
+                    <Ionicons
+                      name={option.icon}
+                      size={18}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.sortOptionText}>{option.label}</Text>
+                    {selected ? (
+                      <Ionicons
+                        name="checkmark"
+                        size={18}
+                        color={colors.primary}
+                      />
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+
+          {/* Results */}
+          {filteredCommunityDecks.length === 0 ? (
+            <View style={styles.emptySearch}>
+              <Ionicons name="search-outline" size={38} color={colors.muted} />
+              <Text style={styles.emptySearchTitle}>
+                Không tìm thấy bộ từ nào
+              </Text>
+              <Text style={styles.emptySearchHint}>
+                Thử nhập từ khóa khác hoặc xóa nội dung tìm kiếm.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.list}>
+              {filteredCommunityDecks.map((deck) => (
+                <DeckCard
+                  key={deck.id}
+                  deck={deck}
+                  onPress={() => router.push(`/deck/${deck.id}`)}
+                />
+              ))}
+            </View>
+          )}
         </View>
       )}
     </AppScreen>
@@ -256,14 +398,6 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
     headerCopy: { flex: 1, paddingRight: 12 },
     title: { color: "#fff", fontSize: 26, fontWeight: "900" },
     subtitle: { color: "rgba(255,255,255,0.78)", marginTop: 5 },
-    headerIcon: {
-      width: 49,
-      height: 49,
-      borderRadius: 17,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: "rgba(255,255,255,0.16)",
-    },
     tabList: {
       minHeight: 58,
       flexDirection: "row",
@@ -313,6 +447,12 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
     },
     tabTextSelected: { color: colors.primary },
     sectionContent: { gap: 13 },
+    sectionHeadingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
     sectionHeading: {
       flexDirection: "row",
       alignItems: "center",
@@ -333,4 +473,82 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
     },
     list: { gap: 15 },
     pressed: { opacity: 0.72 },
+
+    // Search Bar
+    searchBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      height: 48,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    searchInput: {
+      flex: 1,
+      color: colors.text,
+      fontSize: 15,
+      paddingVertical: 0,
+    },
+
+    // Sort
+    sortSelect: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      paddingHorizontal: 13,
+      paddingVertical: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    sortSelectText: {
+      color: colors.primary,
+      fontWeight: "800",
+      fontSize: 13,
+    },
+    sortValue: {
+      flex: 1,
+      color: colors.text,
+      fontWeight: "900",
+      fontSize: 13,
+    },
+    sortMenu: {
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      overflow: "hidden",
+    },
+    sortOption: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    sortOptionSelected: { backgroundColor: colors.primarySoft },
+    sortOptionText: { flex: 1, color: colors.text, fontWeight: "800" },
+
+    // Empty Search State
+    emptySearch: {
+      paddingVertical: 40,
+      alignItems: "center",
+      gap: 8,
+    },
+    emptySearchTitle: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: "900",
+    },
+    emptySearchHint: {
+      color: colors.muted,
+      fontSize: 13,
+      textAlign: "center",
+    },
   });

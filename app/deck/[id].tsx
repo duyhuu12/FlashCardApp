@@ -15,11 +15,12 @@ import {
 import { speakEnglish, stopSpeaking } from '@/src/services/speechService';
 import { resolveDeckColor, useAppTheme, useThemedStyles, type AppColors, type AppShadows } from '@/src/theme/colors';
 import type { Deck, Flashcard } from '@/src/types/models';
+import { getAvatarSource } from '@/src/constants/avatarOptions';
 import { friendlyError } from '@/src/utils/errors';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 export default function DeckDetailScreen() {
   const { colors } = useAppTheme();
@@ -151,14 +152,25 @@ export default function DeckDetailScreen() {
     <AppScreen>
       <View style={[styles.banner, { backgroundColor: resolveDeckColor(deck.color, colors.primary) }]}>
         <View style={styles.bannerTop}>
-          <Ionicons name="layers" size={34} color="#fff" />
+          {deck.authorName ? (
+            <View style={styles.authorAvatarCircle}>
+              <Image source={getAvatarSource(deck.authorAvatarId)} style={styles.authorAvatarImg} />
+            </View>
+          ) : (
+            <Ionicons name="book" size={32} color="#fff" />
+          )}
           <View style={styles.actions}>
             {editable ? <Pressable onPress={() => router.push({ pathname: '/deck/form', params: { id } })}><Ionicons name="create-outline" size={25} color="#fff" /></Pressable> : null}
             {editable ? <Pressable onPress={confirmDeleteDeck}><Ionicons name="trash-outline" size={24} color="#fff" /></Pressable> : null}
           </View>
         </View>
         <Text style={styles.bannerTitle}>{deck.title}</Text>
-        {deck.authorName ? <View style={styles.authorRow}><Ionicons name="person-circle-outline" size={18} color="#fff" /><Text style={styles.authorText}>Tác giả: {deck.authorName}</Text></View> : null}
+        {deck.authorName ? (
+          <View style={styles.authorRow}>
+            <Image source={getAvatarSource(deck.authorAvatarId)} style={styles.authorSmallAvatar} />
+            <Text style={styles.authorText}>Tác giả: {deck.authorName}</Text>
+          </View>
+        ) : null}
         <Text style={styles.bannerDescription}>{deck.description || 'Bộ từ vựng của bạn'}</Text>
         <Text style={styles.bannerMeta}>{deck.cardCount} thẻ · {deck.sourceLanguage} → {deck.targetLanguage}</Text>
       </View>
@@ -204,7 +216,10 @@ export default function DeckDetailScreen() {
 
 const createStyles = (colors: AppColors, shadows: AppShadows) => StyleSheet.create({
   banner: { borderRadius: 24, padding: 20, gap: 8, ...shadows.card },
-  bannerTop: { flexDirection: 'row', justifyContent: 'space-between' },
+  bannerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  authorAvatarCircle: { width: 46, height: 46, borderRadius: 16, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.22)' },
+  authorAvatarImg: { width: '100%', height: '100%' },
+  authorSmallAvatar: { width: 18, height: 18, borderRadius: 9 },
   actions: { flexDirection: 'row', gap: 18 },
   bannerTitle: { color: '#fff', fontSize: 25, fontWeight: '900' },
   authorRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },

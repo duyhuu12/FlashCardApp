@@ -13,7 +13,7 @@ interface Props extends PropsWithChildren {
   safeAreaEdges?: Edge[];
 }
 
-export function AppScreen({ children, scroll = true, contentStyle, refreshControl, scrollProps, scrollRef, floatingContent, safeAreaEdges = ['top', 'left', 'right'] }: Props) {
+export function AppScreen({ children, scroll = true, contentStyle, refreshControl, scrollProps, scrollRef, floatingContent, safeAreaEdges = ['top', 'left', 'right', 'bottom'] }: Props) {
   const styles = useThemedStyles(createStyles);
   return (
     <SafeAreaView style={styles.safe} edges={safeAreaEdges}>

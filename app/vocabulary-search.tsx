@@ -62,7 +62,7 @@ export default function VocabularySearchScreen() {
   return (
     <AppScreen
       contentStyle={styles.screen}
-      safeAreaEdges={["left", "right"]}
+      safeAreaEdges={["left", "right", "bottom"]}
       scrollProps={{ keyboardShouldPersistTaps: "handled" }}
     >
       <StatusBar

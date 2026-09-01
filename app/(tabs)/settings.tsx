@@ -694,7 +694,13 @@ export default function SettingsScreen() {
             style={styles.modalBackdrop}
             onPress={() => !savingProfile && setProfileEditorOpen(false)}
           >
-            <Pressable style={styles.tagSheet} onPress={() => undefined}>
+            <Pressable
+              style={[
+                styles.tagSheet,
+                { paddingBottom: Math.max(28, 16 + insets.bottom) },
+              ]}
+              onPress={() => undefined}
+            >
               <View style={styles.avatarSheetHeader}>
                 <View style={styles.avatarSheetCopy}>
                   <Text style={styles.avatarSheetTitle}>Chỉnh sửa hồ sơ</Text>
@@ -841,7 +847,13 @@ export default function SettingsScreen() {
           style={styles.modalBackdrop}
           onPress={() => !savingAvatarId && setAvatarPickerOpen(false)}
         >
-          <Pressable style={styles.avatarSheet} onPress={() => undefined}>
+          <Pressable
+            style={[
+              styles.avatarSheet,
+              { paddingBottom: Math.max(28, 16 + insets.bottom) },
+            ]}
+            onPress={() => undefined}
+          >
             <View style={styles.avatarSheetHeader}>
               <View style={styles.avatarSheetCopy}>
                 <Text style={styles.avatarSheetTitle}>Chọn avatar</Text>

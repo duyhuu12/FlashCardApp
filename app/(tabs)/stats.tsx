@@ -2,19 +2,23 @@ import { AppScreen } from "@/src/components/AppScreen";
 import { ErrorView, LoadingView } from "@/src/components/StateView";
 import { getAvatarSource } from "@/src/constants/avatarOptions";
 import { useAuth } from "@/src/context/AuthContext";
-import { getLearningStats, listLeaderboard } from "@/src/services/deckService";
+import {
+  getLearningStats,
+  listLeaderboard,
+  listProgress,
+} from "@/src/services/deckService";
 import {
   useAppTheme,
   useThemedStyles,
   type AppColors,
   type AppShadows,
 } from "@/src/theme/colors";
-import type { LeaderboardEntry, LearningStats } from "@/src/types/models";
+import type { CardProgress, LeaderboardEntry, LearningStats } from "@/src/types/models";
 import { friendlyError } from "@/src/utils/errors";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -36,6 +40,7 @@ export default function StatsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [stats, setStats] = useState(emptyStats);
+  const [progressItems, setProgressItems] = useState<CardProgress[]>([]);
   const [leaders, setLeaders] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -44,13 +49,18 @@ export default function StatsScreen() {
   const [progressSlide, setProgressSlide] = useState(0);
   const [progressCardWidth, setProgressCardWidth] = useState(0);
   const tabsTopRef = useRef(Number.POSITIVE_INFINITY);
+
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     setError("");
     try {
-      const nextStats = await getLearningStats(user.uid);
+      const [nextStats, progress] = await Promise.all([
+        getLearningStats(user.uid),
+        listProgress(user.uid),
+      ]);
       setStats(nextStats);
+      setProgressItems(progress);
       listLeaderboard()
         .then(setLeaders)
         .catch(() => setLeaders([]));
@@ -60,11 +70,148 @@ export default function StatsScreen() {
       setLoading(false);
     }
   }, [user]);
+
   useFocusEffect(
     useCallback(() => {
       load();
     }, [load]),
   );
+
+  // 1. Biểu đồ 7 Ngày qua (7-Day Activity Bar Chart)
+  const weeklyActivity = useMemo(() => {
+    const days: { label: string; dateStr: string; count: number; isToday: boolean }[] = [];
+    const now = new Date();
+    const dayNames = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split("T")[0];
+      const label = dayNames[d.getDay()];
+      const isToday = i === 0;
+
+      const count = progressItems.filter((p) => {
+        if (!p.lastReviewedAt) return false;
+        const pDate = p.lastReviewedAt instanceof Date
+          ? p.lastReviewedAt
+          : (p.lastReviewedAt as any).toDate
+            ? (p.lastReviewedAt as any).toDate()
+            : new Date(p.lastReviewedAt);
+        return pDate.toISOString().split("T")[0] === dateStr;
+      }).length;
+
+      days.push({ label, dateStr, count, isToday });
+    }
+
+    const maxCount = Math.max(1, ...days.map((d) => d.count));
+    return { days, maxCount };
+  }, [progressItems]);
+
+  // 2. Biểu đồ Cấp độ Trí nhớ (Memory Retention Stages)
+  const retentionStages = useMemo(() => {
+    let stage1 = 0; // Mới gặp
+    let stage2 = 0; // Đang củng cố
+    let stage3 = 0; // Sắp thuộc
+    let stage4 = 0; // Đã thuộc dài hạn
+
+    progressItems.forEach((p) => {
+      if (!p.lastReviewedAt) return;
+      if (p.mastered || (p.consecutiveCorrect >= 3 && p.intervalMinutes >= 7 * 24 * 60)) {
+        stage4 += 1;
+      } else if (p.consecutiveCorrect >= 2) {
+        stage3 += 1;
+      } else if (p.consecutiveCorrect >= 1) {
+        stage2 += 1;
+      } else {
+        stage1 += 1;
+      }
+    });
+
+    const totalReviewed = Math.max(1, stage1 + stage2 + stage3 + stage4);
+
+    return [
+      {
+        id: "stage1",
+        name: "Mới gặp",
+        detail: "Trí nhớ ngắn hạn (10-30 phút)",
+        count: stage1,
+        percent: Math.round((stage1 / totalReviewed) * 100),
+        color: "#FFB020",
+        soft: "#FFF7E6",
+      },
+      {
+        id: "stage2",
+        name: "Đang củng cố",
+        detail: "Ôn lại 1-2 lần (1-3 ngày)",
+        count: stage2,
+        percent: Math.round((stage2 / totalReviewed) * 100),
+        color: "#1CB0F6",
+        soft: "#EAF7FF",
+      },
+      {
+        id: "stage3",
+        name: "Sắp thuộc",
+        detail: "Khắc sâu ghi nhớ (3-7 ngày)",
+        count: stage3,
+        percent: Math.round((stage3 / totalReviewed) * 100),
+        color: "#A05EB5",
+        soft: "#F6ECFC",
+      },
+      {
+        id: "stage4",
+        name: "Đã thuộc dài hạn",
+        detail: "Ghi nhớ bền vững (≥ 7 ngày)",
+        count: stage4,
+        percent: Math.round((stage4 / totalReviewed) * 100),
+        color: "#20BF6B",
+        soft: "#E8F8F0",
+      },
+    ];
+  }, [progressItems]);
+
+  // 3. Thời gian & Tốc độ Học (Study Time & Speed Metrics)
+  const studySpeedMetrics = useMemo(() => {
+    const totalReps = progressItems.reduce((acc, p) => acc + (p.repetitions || 0), 0);
+    const totalSeconds = totalReps * 35;
+    const hours = Math.floor(totalSeconds / 3600);
+    const mins = Math.round((totalSeconds % 3600) / 60);
+    const timeText = hours > 0 ? `${hours}h ${mins}p` : `${mins} phút`;
+
+    const streakDays = Math.max(1, stats.streak || 1);
+    const dailyAvg = Math.max(1, Math.round(progressItems.length / streakDays));
+    const remaining = Math.max(0, (stats.totalCards || 3000) - stats.mastered);
+    const daysLeft = Math.ceil(remaining / dailyAvg);
+
+    return { timeText, dailyAvg, daysLeft };
+  }, [progressItems, stats]);
+
+  // 4. Dự báo Lịch ôn 7 Ngày tới (7-Day Upcoming Review Forecast)
+  const reviewForecast = useMemo(() => {
+    const forecast: { label: string; dateStr: string; count: number; isToday: boolean }[] = [];
+    const now = new Date();
+    const dayNames = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() + i);
+      const dateStr = d.toISOString().split("T")[0];
+      const label = i === 0 ? "Hôm nay" : i === 1 ? "Ngày mai" : dayNames[d.getDay()];
+
+      const count = progressItems.filter((p) => {
+        if (!p.nextReviewAt) return false;
+        const nDate = p.nextReviewAt instanceof Date
+          ? p.nextReviewAt
+          : (p.nextReviewAt as any).toDate
+            ? (p.nextReviewAt as any).toDate()
+            : new Date(p.nextReviewAt);
+        return nDate.toISOString().split("T")[0] === dateStr;
+      }).length;
+
+      forecast.push({ label, dateStr, count, isToday: i === 0 });
+    }
+
+    return forecast;
+  }, [progressItems]);
 
   if (loading)
     return (
@@ -78,9 +225,11 @@ export default function StatsScreen() {
         <ErrorView message={error} onRetry={load} />
       </AppScreen>
     );
+
   const percent = stats.totalCards
     ? Math.round((stats.mastered / stats.totalCards) * 100)
     : 0;
+
   const cards = [
     {
       label: "Đã thuộc",
@@ -115,6 +264,7 @@ export default function StatsScreen() {
       soft: colors.primarySoft,
     },
   ];
+
   const achievements = [
     {
       title: "Bước đầu tiên",
@@ -141,6 +291,7 @@ export default function StatsScreen() {
       icon: "ribbon" as const,
     },
   ];
+
   const todayGoal = Math.max(1, stats.dailyGoal ?? 30);
   const reviewedToday = stats.reviewedToday ?? 0;
   const dailyPercent = Math.min(
@@ -238,6 +389,7 @@ export default function StatsScreen() {
 
       {segment === "overview" ? (
         <>
+          {/* Slide Progress & Daily Goal */}
           <View
             onLayout={(event) =>
               setProgressCardWidth(event.nativeEvent.layout.width)
@@ -259,55 +411,54 @@ export default function StatsScreen() {
               showsHorizontalScrollIndicator={false}
             >
               <View style={[styles.progressPage, { width: progressCardWidth }]}>
-          <View style={styles.hero}>
-            <View style={styles.circle}>
-              <Text style={styles.percent}>{percent}%</Text>
-              <Text style={styles.small}>ĐÃ THUỘC</Text>
-            </View>
-            <View style={styles.heroCopy}>
-              <Text style={styles.heroEyebrow}>TỔNG TIẾN ĐỘ</Text>
-              <Text style={styles.heroTitle}>
-                {stats.mastered.toLocaleString("vi-VN")} từ đã ghi nhớ
-              </Text>
-              <Text style={styles.heroText}>
-                Trong tổng số {stats.totalCards.toLocaleString("vi-VN")} từ của
-                bạn
-              </Text>
-            </View>
-          </View>
+                <View style={styles.hero}>
+                  <View style={styles.circle}>
+                    <Text style={styles.percent}>{percent}%</Text>
+                    <Text style={styles.small}>ĐÃ THUỘC</Text>
+                  </View>
+                  <View style={styles.heroCopy}>
+                    <Text style={styles.heroEyebrow}>TỔNG TIẾN ĐỘ</Text>
+                    <Text style={styles.heroTitle}>
+                      {stats.mastered.toLocaleString("vi-VN")} từ đã ghi nhớ
+                    </Text>
+                    <Text style={styles.heroText}>
+                      Trong tổng số {stats.totalCards.toLocaleString("vi-VN")} từ của bạn
+                    </Text>
+                  </View>
+                </View>
               </View>
 
               <View style={[styles.progressPage, { width: progressCardWidth }]}>
-          <View style={styles.dailyCard}>
-            <View style={styles.dailyTop}>
-              <View style={styles.dailyIcon}>
-                <Ionicons name="flag" size={23} color={colors.primary} />
-              </View>
-              <View style={styles.dailyCopy}>
-                <Text style={styles.dailyLabel}>MỤC TIÊU HÔM NAY</Text>
-                <Text style={styles.dailyValue}>
-                  {reviewedToday}/{todayGoal} thẻ
-                </Text>
-              </View>
-              <Text style={styles.dailyPercent}>{dailyPercent}%</Text>
-            </View>
-            <View style={styles.track}>
-              <View style={[styles.fill, { width: `${dailyPercent}%` }]} />
-            </View>
-            <View style={styles.quickStats}>
-              <View style={styles.quickStat}>
-                <Ionicons name="flame" size={20} color={colors.warning} />
-                <Text style={styles.quickValue}>{stats.streak ?? 0}</Text>
-                <Text style={styles.quickLabel}>ngày streak</Text>
-              </View>
-              <View style={styles.quickDivider} />
-              <View style={styles.quickStat}>
-                <Ionicons name="diamond" size={19} color={colors.primary} />
-                <Text style={styles.quickValue}>{stats.xp ?? 0}</Text>
-                <Text style={styles.quickLabel}>KN tích lũy</Text>
-              </View>
-            </View>
-          </View>
+                <View style={styles.dailyCard}>
+                  <View style={styles.dailyTop}>
+                    <View style={styles.dailyIcon}>
+                      <Ionicons name="flag" size={23} color={colors.primary} />
+                    </View>
+                    <View style={styles.dailyCopy}>
+                      <Text style={styles.dailyLabel}>MỤC TIÊU HÔM NAY</Text>
+                      <Text style={styles.dailyValue}>
+                        {reviewedToday}/{todayGoal} thẻ
+                      </Text>
+                    </View>
+                    <Text style={styles.dailyPercent}>{dailyPercent}%</Text>
+                  </View>
+                  <View style={styles.track}>
+                    <View style={[styles.fill, { width: `${dailyPercent}%` }]} />
+                  </View>
+                  <View style={styles.quickStats}>
+                    <View style={styles.quickStat}>
+                      <Ionicons name="flame" size={20} color={colors.warning} />
+                      <Text style={styles.quickValue}>{stats.streak ?? 0}</Text>
+                      <Text style={styles.quickLabel}>ngày streak</Text>
+                    </View>
+                    <View style={styles.quickDivider} />
+                    <View style={styles.quickStat}>
+                      <Ionicons name="diamond" size={19} color={colors.primary} />
+                      <Text style={styles.quickValue}>{stats.xp ?? 0}</Text>
+                      <Text style={styles.quickLabel}>KN tích lũy</Text>
+                    </View>
+                  </View>
+                </View>
               </View>
             </ScrollView>
             <View style={styles.carouselDots}>
@@ -323,6 +474,7 @@ export default function StatsScreen() {
             </View>
           </View>
 
+          {/* Quick Stats Grid */}
           <View style={styles.sectionHeading}>
             <Text style={styles.sectionTitle}>Từ vựng của bạn</Text>
             <Text style={styles.sectionMeta}>
@@ -362,6 +514,196 @@ export default function StatsScreen() {
                 />
               </Pressable>
             ))}
+          </View>
+
+          {/* FEATURE 1: 7-Day Study Bar Chart */}
+          <View style={styles.featureCard}>
+            <View style={styles.featureCardHeader}>
+              <View style={[styles.featureIconWrapper, { backgroundColor: colors.primarySoft }]}>
+                <Ionicons name="bar-chart" size={22} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.featureCardTitle}>Hoạt động 7 ngày qua</Text>
+                <Text style={styles.featureCardHint}>Số lượt từ vựng bạn đã ôn/học mỗi ngày</Text>
+              </View>
+            </View>
+            <View style={styles.barChartRow}>
+              {weeklyActivity.days.map((day) => {
+                const heightPercent = Math.max(12, Math.round((day.count / weeklyActivity.maxCount) * 100));
+                return (
+                  <View key={day.dateStr} style={styles.barColumn}>
+                    <Text style={styles.barValueText}>{day.count > 0 ? day.count : ""}</Text>
+                    <View style={styles.barTrack}>
+                      <View
+                        style={[
+                          styles.barFill,
+                          {
+                            height: `${heightPercent}%`,
+                            backgroundColor: day.isToday
+                              ? colors.primary
+                              : day.count > 0
+                                ? colors.primaryDark
+                                : colors.border,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.barLabel,
+                        day.isToday && { color: colors.primary, fontWeight: "900" },
+                      ]}
+                    >
+                      {day.label}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* FEATURE 2: Memory Retention Stages */}
+          <View style={styles.featureCard}>
+            <View style={styles.featureCardHeader}>
+              <View style={[styles.featureIconWrapper, { backgroundColor: colors.successSoft }]}>
+                <Ionicons name="git-network" size={22} color={colors.success} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.featureCardTitle}>Phân bổ cấp độ trí nhớ</Text>
+                <Text style={styles.featureCardHint}>Dịch chuyển từ vựng từ ngắn hạn sang dài hạn</Text>
+              </View>
+            </View>
+
+            {/* Retention Funnel Multi-segment bar */}
+            <View style={styles.funnelBar}>
+              {retentionStages.map((stage) =>
+                stage.percent > 0 ? (
+                  <View
+                    key={stage.id}
+                    style={{
+                      height: "100%",
+                      width: `${stage.percent}%`,
+                      backgroundColor: stage.color,
+                    }}
+                  />
+                ) : null,
+              )}
+            </View>
+
+            {/* Stage Items */}
+            <View style={{ gap: 8, marginTop: 12 }}>
+              {retentionStages.map((stage) => (
+                <View key={stage.id} style={styles.stageRow}>
+                  <View style={[styles.stageBadgeDot, { backgroundColor: stage.color }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.stageName}>{stage.name}</Text>
+                    <Text style={styles.stageDetail}>{stage.detail}</Text>
+                  </View>
+                  <Text style={styles.stageCountText}>{stage.count} từ</Text>
+                  <Text style={[styles.stagePercentText, { color: stage.color }]}>
+                    {stage.percent}%
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* FEATURE 3: Study Time & Speed Metrics */}
+          <View style={styles.featureCard}>
+            <View style={styles.featureCardHeader}>
+              <View style={[styles.featureIconWrapper, { backgroundColor: colors.warningSoft }]}>
+                <Ionicons name="speedometer" size={22} color={colors.warning} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.featureCardTitle}>Thời gian & Tốc độ làm chủ</Text>
+                <Text style={styles.featureCardHint}>Hiệu suất tích lũy từ khi bắt đầu học</Text>
+              </View>
+            </View>
+
+            <View style={styles.metricsGrid}>
+              <View style={styles.metricBox}>
+                <Ionicons name="time" size={22} color={colors.primary} />
+                <Text style={styles.metricValue}>{studySpeedMetrics.timeText}</Text>
+                <Text style={styles.metricLabel}>Đã tích lũy học</Text>
+              </View>
+              <View style={styles.metricBox}>
+                <Ionicons name="flash" size={22} color={colors.warning} />
+                <Text style={styles.metricValue}>{studySpeedMetrics.dailyAvg} từ</Text>
+                <Text style={styles.metricLabel}>Tốc độ / ngày</Text>
+              </View>
+              <View style={styles.metricBox}>
+                <Ionicons name="flag" size={22} color={colors.success} />
+                <Text style={styles.metricValue}>~{studySpeedMetrics.daysLeft} ngày</Text>
+                <Text style={styles.metricLabel}>Dự kiến cán đích</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* FEATURE 4: 7-Day Upcoming Review Forecast */}
+          <View style={styles.featureCard}>
+            <View style={styles.featureCardHeader}>
+              <View style={[styles.featureIconWrapper, { backgroundColor: colors.primarySoft }]}>
+                <Ionicons name="calendar-outline" size={22} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.featureCardTitle}>Dự báo lịch ôn 7 ngày tới</Text>
+                <Text style={styles.featureCardHint}>Số từ tự động nhắc ôn theo thuật toán lặp lại ngắt quãng</Text>
+              </View>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.forecastScroll}
+            >
+              {reviewForecast.map((item) => (
+                <View
+                  key={item.dateStr}
+                  style={[
+                    styles.forecastItem,
+                    item.isToday && styles.forecastItemToday,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.forecastLabel,
+                      item.isToday && { color: colors.primary, fontWeight: "900" },
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                  <View
+                    style={[
+                      styles.forecastBadge,
+                      {
+                        backgroundColor:
+                          item.count > 0
+                            ? item.isToday
+                              ? colors.primary
+                              : colors.primarySoft
+                            : colors.background,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.forecastCountText,
+                        {
+                          color:
+                            item.count > 0
+                              ? item.isToday
+                                ? "#FFFFFF"
+                                : colors.primary
+                              : colors.muted,
+                        },
+                      ]}
+                    >
+                      {item.count} từ
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
           </View>
         </>
       ) : (
@@ -509,14 +851,6 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
     },
     title: { color: "#fff", fontSize: 26, fontWeight: "900" },
     subtitle: { color: "rgba(255,255,255,0.78)", marginTop: 4 },
-    headerIcon: {
-      width: 48,
-      height: 48,
-      borderRadius: 16,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: "rgba(255,255,255,0.16)",
-    },
     segmentedControl: {
       flexDirection: "row",
       minHeight: 58,
@@ -668,7 +1002,7 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      marginTop: 3,
+      marginTop: 14,
     },
     sectionTitle: { color: colors.text, fontSize: 20, fontWeight: "900" },
     sectionMeta: { color: colors.primary, fontSize: 12, fontWeight: "800" },
@@ -698,6 +1032,184 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
     statCopy: { flex: 1 },
     statValue: { color: colors.text, fontSize: 21, fontWeight: "900" },
     statLabel: { color: colors.muted, fontSize: 12, marginTop: 2 },
+
+    // Feature Card Styling
+    featureCard: {
+      padding: 18,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      marginTop: 14,
+      gap: 14,
+      ...shadows.card,
+    },
+    featureCardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    featureIconWrapper: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    featureCardTitle: {
+      color: colors.text,
+      fontSize: 17,
+      fontWeight: "900",
+    },
+    featureCardHint: {
+      color: colors.muted,
+      fontSize: 12,
+      marginTop: 2,
+    },
+
+    // 1. Bar Chart Styles
+    barChartRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      justifyContent: "space-between",
+      height: 140,
+      paddingTop: 10,
+      paddingHorizontal: 4,
+    },
+    barColumn: {
+      flex: 1,
+      alignItems: "center",
+      height: "100%",
+      justifyContent: "flex-end",
+      gap: 6,
+    },
+    barValueText: {
+      color: colors.primary,
+      fontSize: 10,
+      fontWeight: "900",
+    },
+    barTrack: {
+      width: 14,
+      height: 90,
+      borderRadius: 7,
+      backgroundColor: colors.background,
+      justifyContent: "flex-end",
+      overflow: "hidden",
+    },
+    barFill: {
+      width: "100%",
+      borderRadius: 7,
+    },
+    barLabel: {
+      color: colors.muted,
+      fontSize: 11,
+      fontWeight: "700",
+    },
+
+    // 2. Retention Funnel Styles
+    funnelBar: {
+      height: 10,
+      borderRadius: 99,
+      flexDirection: "row",
+      overflow: "hidden",
+      backgroundColor: colors.border,
+    },
+    stageRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingVertical: 4,
+    },
+    stageBadgeDot: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+    },
+    stageName: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+    },
+    stageDetail: {
+      color: colors.muted,
+      fontSize: 11,
+      marginTop: 1,
+    },
+    stageCountText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "800",
+    },
+    stagePercentText: {
+      fontSize: 14,
+      fontWeight: "900",
+      minWidth: 40,
+      textAlign: "right",
+    },
+
+    // 3. Metrics Grid Styles
+    metricsGrid: {
+      flexDirection: "row",
+      gap: 10,
+    },
+    metricBox: {
+      flex: 1,
+      padding: 13,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+      alignItems: "center",
+      gap: 4,
+    },
+    metricValue: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: "900",
+      marginTop: 2,
+    },
+    metricLabel: {
+      color: colors.muted,
+      fontSize: 10,
+      textAlign: "center",
+    },
+
+    // 4. Forecast Scroll Styles
+    forecastScroll: {
+      gap: 9,
+      paddingVertical: 2,
+    },
+    forecastItem: {
+      width: 72,
+      paddingVertical: 11,
+      paddingHorizontal: 6,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+      alignItems: "center",
+      gap: 8,
+    },
+    forecastItemToday: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft,
+    },
+    forecastLabel: {
+      color: colors.muted,
+      fontSize: 11,
+      fontWeight: "800",
+    },
+    forecastBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 10,
+    },
+    forecastCountText: {
+      fontSize: 11,
+      fontWeight: "900",
+    },
+
+    // Achievements Section Styles
     achievementHero: {
       flexDirection: "row",
       alignItems: "center",

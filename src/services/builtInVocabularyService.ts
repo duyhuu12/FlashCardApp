@@ -65,7 +65,7 @@ export function listBuiltInDecks(uid: string): Deck[] {
     title: topic.titleEnglish ? `${topic.title} (${topic.titleEnglish})` : topic.title,
     description: `Bài ${topic.order}/${dataset.topicCount} · Nhóm ${category.title}`,
     topic: topic.title, sourceLanguage: 'Tiếng Anh', targetLanguage: 'Tiếng Việt',
-    color: '#087A9B', isPublic: false, cardCount: topic.cards.length,
+    color: '#087A9B', isPublic: false, cardCount: Math.min(30, topic.cards.length),
     copiedFromDeckId: null, seedId: dataset.id, pathId: dataset.id, pathTitle: dataset.title,
     pathOrder: topic.order, categoryId: category.id, categoryTitle: category.title,
     categoryOrder: category.order, topicId: topic.id, topicOrder: topic.order,
@@ -111,7 +111,7 @@ export function listBuiltInCards(deckId: string): Flashcard[] | null {
   const cached = cardCache.get(deckId);
   if (cached) return cached;
   const entry = topics.find(({ topic }) => topic.order === order); if (!entry) return null;
-  const cards = entry.topic.cards.map((card, index) => ({
+  const cards = entry.topic.cards.slice(0, 30).map((card, index) => ({
     id: builtInCardId(order, index + 1), deckId, term: card.term,
     termNormalized: card.term.trim().toLocaleLowerCase('en-US'), meaning: card.meaning,
     example: card.example, pronunciation: card.pronunciation, imageUrl: card.imageUrl,
@@ -159,7 +159,7 @@ function getVocabularyIndex(uid: string): IndexedVocabularySearchResult[] {
     const deck = decksByOrder.get(topic.order);
     if (!deck) return [];
 
-    return topic.cards.flatMap((sourceCard, index) => {
+    return topic.cards.slice(0, 30).flatMap((sourceCard, index) => {
       const normalizedTerm = normalizeSearchText(sourceCard.term);
       const card: Flashcard = {
         id: builtInCardId(topic.order, index + 1),
