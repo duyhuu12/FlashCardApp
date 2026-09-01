@@ -520,18 +520,19 @@ export async function getStudyQueue(
   else if (mode === 'mistakes') selected = mistakes.slice(0, pageSize);
   else if (mode === 'all') selected = cards.slice(0, pageSize);
   else {
-    const picked = new Set<string>();
-    selected = [];
-    const append = (items: Flashcard[], count: number) => items.forEach((card) => {
-      if (selected.length < pageSize && count > 0 && !picked.has(card.id)) {
-        picked.add(card.id); selected.push(card); count -= 1;
-      }
-    });
-    append(mistakes, 5);
-    append(hard, 5);
-    append(due, 15);
-    append(unseen, pageSize - selected.length);
-    if (unseen.length === 0 && selected.length < pageSize) {
+    if (unseen.length > 0) {
+      selected = unseen.slice(0, pageSize);
+    } else {
+      const picked = new Set<string>();
+      selected = [];
+      const append = (items: Flashcard[], count: number) => items.forEach((card) => {
+        if (selected.length < pageSize && count > 0 && !picked.has(card.id)) {
+          picked.add(card.id); selected.push(card); count -= 1;
+        }
+      });
+      append(mistakes, 5);
+      append(hard, 5);
+      append(due, 15);
       append(reviewed, pageSize - selected.length);
     }
   }

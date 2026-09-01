@@ -12,6 +12,7 @@ export function friendlyError(error: unknown) {
     'auth/google-id-token-missing': 'Không nhận được thông tin xác thực từ Google.',
     'auth/google-sign-in-in-progress': 'Đăng nhập Google đang được xử lý.',
     'auth/google-play-services-unavailable': 'Google Play Services chưa có hoặc cần được cập nhật.',
+    'auth/too-many-requests': 'Bạn đã nhập sai quá nhiều lần. Vui lòng đợi ít phút rồi thử lại.',
     'permission-denied': 'Bạn không có quyền thực hiện thao tác này.',
     unavailable: 'Dịch vụ đang tạm gián đoạn. Vui lòng thử lại.',
   };

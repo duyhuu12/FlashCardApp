@@ -19,7 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { doc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -28,6 +28,8 @@ import {
   KeyboardAvoidingView,
   Linking,
   Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -66,8 +68,14 @@ const styleOptions = [
 ];
 
 export default function SettingsScreen() {
-  const { user, profile, refreshProfile, signOut, updateDisplayName, updateProfileTags } =
-    useAuth();
+  const {
+    user,
+    profile,
+    refreshProfile,
+    signOut,
+    updateDisplayName,
+    updateProfileTags,
+  } = useAuth();
   const { colors, isDark, setThemePreference } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const router = useRouter();
@@ -76,6 +84,51 @@ export default function SettingsScreen() {
   const [hour, setHour] = useState("20");
   const [minute, setMinute] = useState("00");
   const [saving, setSaving] = useState(false);
+  const hourScrollRef = useRef<ScrollView>(null);
+  const minuteScrollRef = useRef<ScrollView>(null);
+  const ITEM_HEIGHT = 48;
+  const hours = Array.from({ length: 24 }, (_, i) =>
+    String(i).padStart(2, "0"),
+  );
+  const minutes = Array.from({ length: 60 }, (_, i) =>
+    String(i).padStart(2, "0"),
+  );
+
+  const scrollToHour = useCallback(
+    (h: string, animated = true) => {
+      const idx = hours.indexOf(h);
+      if (idx >= 0)
+        hourScrollRef.current?.scrollTo({ y: idx * ITEM_HEIGHT, animated });
+    },
+    [hours],
+  );
+
+  const scrollToMinute = useCallback(
+    (m: string, animated = true) => {
+      const idx = minutes.indexOf(m);
+      if (idx >= 0)
+        minuteScrollRef.current?.scrollTo({ y: idx * ITEM_HEIGHT, animated });
+    },
+    [minutes],
+  );
+
+  const handleHourScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const idx = Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT);
+      const clamped = Math.max(0, Math.min(23, idx));
+      setHour(hours[clamped]);
+    },
+    [hours],
+  );
+
+  const handleMinuteScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const idx = Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT);
+      const clamped = Math.max(0, Math.min(59, idx));
+      setMinute(minutes[clamped]);
+    },
+    [minutes],
+  );
   const [reminderMenuOpen, setReminderMenuOpen] = useState(false);
   const [infoMenuOpen, setInfoMenuOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
@@ -93,12 +146,24 @@ export default function SettingsScreen() {
   useEffect(() => {
     if (!profile) return;
     setEnabled(profile.reminderEnabled);
-    setHour(String(profile.reminderHour).padStart(2, "0"));
-    setMinute(String(profile.reminderMinute).padStart(2, "0"));
+    const h = String(profile.reminderHour).padStart(2, "0");
+    const m = String(profile.reminderMinute).padStart(2, "0");
+    setHour(h);
+    setMinute(m);
     setSelectedAge(profile.ageGroup || "");
     setSelectedInterests(profile.interests || []);
     setSelectedStyle(profile.styleTag || "");
   }, [profile]);
+
+  useEffect(() => {
+    if (!reminderMenuOpen) return;
+    // Scroll to saved position when panel opens
+    const t = setTimeout(() => {
+      scrollToHour(hour, false);
+      scrollToMinute(minute, false);
+    }, 100);
+    return () => clearTimeout(t);
+  }, [reminderMenuOpen]);
 
   async function saveProfile() {
     const nextName = displayName.trim().replace(/\s+/g, " ");
@@ -514,27 +579,121 @@ export default function SettingsScreen() {
                           Thông báo chỉ được cấu hình trên ứng dụng Android/iOS.
                         </Text>
                       ) : null}
-                      <View style={styles.timeRow}>
-                        <View style={{ flex: 1 }}>
-                          <AppInput
-                            label="Giờ"
-                            value={hour}
-                            onChangeText={setHour}
-                            keyboardType="number-pad"
-                            maxLength={2}
-                            editable={enabled}
-                          />
+                      <View
+                        style={styles.pickerContainer}
+                        onStartShouldSetResponder={() => true}
+                        onMoveShouldSetResponder={() => true}
+                      >
+                        {/* Hour column */}
+                        <View style={styles.pickerColumn}>
+                          <Text style={styles.pickerLabel}>Giờ</Text>
+                          <View
+                            style={[
+                              styles.pickerWheel,
+                              !enabled && styles.pickerWheelDisabled,
+                            ]}
+                          >
+                            <View
+                              style={styles.pickerHighlight}
+                              pointerEvents="none"
+                            />
+                            <ScrollView
+                              ref={hourScrollRef}
+                              bounces={false}
+                              decelerationRate="fast"
+                              nestedScrollEnabled
+                              onMomentumScrollEnd={handleHourScroll}
+                              scrollEnabled={enabled}
+                              scrollEventThrottle={16}
+                              showsVerticalScrollIndicator={false}
+                              snapToInterval={ITEM_HEIGHT}
+                              style={styles.pickerScroll}
+                              contentContainerStyle={[
+                                styles.pickerContentPad,
+                                { paddingVertical: ITEM_HEIGHT },
+                              ]}
+                            >
+                              {hours.map((h) => (
+                                <Pressable
+                                  key={h}
+                                  onPress={() => {
+                                    if (enabled) {
+                                      setHour(h);
+                                      scrollToHour(h);
+                                    }
+                                  }}
+                                  style={styles.pickerItem}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.pickerItemText,
+                                      h === hour && styles.pickerItemSelected,
+                                      !enabled && styles.pickerItemDisabled,
+                                    ]}
+                                  >
+                                    {h}
+                                  </Text>
+                                </Pressable>
+                              ))}
+                            </ScrollView>
+                          </View>
                         </View>
-                        <Text style={styles.colon}>:</Text>
-                        <View style={{ flex: 1 }}>
-                          <AppInput
-                            label="Phút"
-                            value={minute}
-                            onChangeText={setMinute}
-                            keyboardType="number-pad"
-                            maxLength={2}
-                            editable={enabled}
-                          />
+
+                        <Text style={styles.pickerColon}>:</Text>
+
+                        {/* Minute column */}
+                        <View style={styles.pickerColumn}>
+                          <Text style={styles.pickerLabel}>Phút</Text>
+                          <View
+                            style={[
+                              styles.pickerWheel,
+                              !enabled && styles.pickerWheelDisabled,
+                            ]}
+                          >
+                            <View
+                              style={styles.pickerHighlight}
+                              pointerEvents="none"
+                            />
+                            <ScrollView
+                              ref={minuteScrollRef}
+                              bounces={false}
+                              decelerationRate="fast"
+                              nestedScrollEnabled
+                              onMomentumScrollEnd={handleMinuteScroll}
+                              scrollEnabled={enabled}
+                              scrollEventThrottle={16}
+                              showsVerticalScrollIndicator={false}
+                              snapToInterval={ITEM_HEIGHT}
+                              style={styles.pickerScroll}
+                              contentContainerStyle={[
+                                styles.pickerContentPad,
+                                { paddingVertical: ITEM_HEIGHT },
+                              ]}
+                            >
+                              {minutes.map((m) => (
+                                <Pressable
+                                  key={m}
+                                  onPress={() => {
+                                    if (enabled) {
+                                      setMinute(m);
+                                      scrollToMinute(m);
+                                    }
+                                  }}
+                                  style={styles.pickerItem}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.pickerItemText,
+                                      m === minute && styles.pickerItemSelected,
+                                      !enabled && styles.pickerItemDisabled,
+                                    ]}
+                                  >
+                                    {m}
+                                  </Text>
+                                </Pressable>
+                              ))}
+                            </ScrollView>
+                          </View>
                         </View>
                       </View>
                       <AppButton
@@ -546,35 +705,7 @@ export default function SettingsScreen() {
                     </View>
                   ) : null}
                 </View>
-                <View style={styles.card}>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => {
-                      toggleSettingsPanel();
-                      router.push("/change-password");
-                    }}
-                    style={[styles.heading, styles.cardHeaderTint]}
-                  >
-                    <View style={[styles.bell, styles.cardHeaderIcon]}>
-                      <Ionicons
-                        name="key"
-                        size={24}
-                        color={colors.primary}
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.cardTitle}>Đổi mật khẩu</Text>
-                      <Text style={styles.help}>
-                        Cập nhật mật khẩu mới & đăng xuất
-                      </Text>
-                    </View>
-                    <Ionicons
-                      name="chevron-forward"
-                      size={20}
-                      color={colors.muted}
-                    />
-                  </Pressable>
-                </View>
+
                 <View style={styles.card}>
                   <Pressable
                     accessibilityRole="button"
@@ -628,30 +759,71 @@ export default function SettingsScreen() {
                 <Text style={styles.settingSectionLabel}>Hỗ trợ</Text>
                 <View style={styles.staticSettingRow}>
                   <View style={styles.staticSettingIcon}>
-                    <Ionicons name="star-outline" size={23} color={colors.primary} />
+                    <Ionicons
+                      name="star-outline"
+                      size={23}
+                      color={colors.primary}
+                    />
                   </View>
-                  <Text style={styles.staticSettingTitle}>Đánh giá ứng dụng</Text>
-                  <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+                  <Text style={styles.staticSettingTitle}>
+                    Đánh giá ứng dụng
+                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.muted}
+                  />
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    toggleSettingsPanel();
+                    router.push("/change-password");
+                  }}
+                  style={styles.staticSettingRow}
+                >
+                  <View style={styles.staticSettingIcon}>
+                    <Ionicons
+                      name="key-outline"
+                      size={23}
+                      color={colors.primary}
+                    />
+                  </View>
+                  <Text style={styles.staticSettingTitle}>Đổi mật khẩu</Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.muted}
+                  />
+                </Pressable>
+                <View style={styles.staticSettingRow}>
+                  <View style={styles.staticSettingIcon}>
+                    <Ionicons
+                      name="shield-checkmark-outline"
+                      size={23}
+                      color={colors.primary}
+                    />
+                  </View>
+                  <Text style={styles.staticSettingTitle}>
+                    Chính sách quyền riêng tư
+                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.muted}
+                  />
                 </View>
                 <View style={styles.staticSettingRow}>
                   <View style={styles.staticSettingIcon}>
-                    <Ionicons name="headset-outline" size={23} color={colors.primary} />
+                    <Ionicons
+                      name="code-slash-outline"
+                      size={23}
+                      color={colors.primary}
+                    />
                   </View>
-                  <Text style={styles.staticSettingTitle}>Trung tâm CSKH</Text>
-                  <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-                </View>
-                <View style={styles.staticSettingRow}>
-                  <View style={styles.staticSettingIcon}>
-                    <Ionicons name="shield-checkmark-outline" size={23} color={colors.primary} />
-                  </View>
-                  <Text style={styles.staticSettingTitle}>Chính sách quyền riêng tư</Text>
-                  <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-                </View>
-                <View style={styles.staticSettingRow}>
-                  <View style={styles.staticSettingIcon}>
-                    <Ionicons name="code-slash-outline" size={23} color={colors.primary} />
-                  </View>
-                  <Text style={styles.staticSettingTitle}>Phiên bản ứng dụng</Text>
+                  <Text style={styles.staticSettingTitle}>
+                    Phiên bản ứng dụng
+                  </Text>
                   <Text style={styles.versionText}>1.0.0</Text>
                 </View>
               </ScrollView>
@@ -743,10 +915,7 @@ export default function SettingsScreen() {
                       <Pressable
                         key={group.id}
                         onPress={() => setSelectedAge(group.id)}
-                        style={[
-                          styles.chip,
-                          selected && styles.chipSelected,
-                        ]}
+                        style={[styles.chip, selected && styles.chipSelected]}
                       >
                         <Text
                           style={[
@@ -771,10 +940,7 @@ export default function SettingsScreen() {
                       <Pressable
                         key={item.id}
                         onPress={() => toggleInterest(item.id)}
-                        style={[
-                          styles.chip,
-                          selected && styles.chipSelected,
-                        ]}
+                        style={[styles.chip, selected && styles.chipSelected]}
                       >
                         <Text
                           style={[
@@ -799,10 +965,7 @@ export default function SettingsScreen() {
                       <Pressable
                         key={style.id}
                         onPress={() => setSelectedStyle(style.id)}
-                        style={[
-                          styles.chip,
-                          selected && styles.chipSelected,
-                        ]}
+                        style={[styles.chip, selected && styles.chipSelected]}
                       >
                         <Text
                           style={[
@@ -1099,6 +1262,59 @@ const createStyles = (colors: AppColors, shadows: AppShadows) =>
     link: { color: colors.primary, fontWeight: "800" },
     timeRow: { flexDirection: "row", alignItems: "center", gap: 10 },
     colon: { color: colors.text, fontSize: 25, marginTop: 21 },
+    // Wheel picker
+    pickerContainer: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      justifyContent: "center",
+      gap: 6,
+    },
+    pickerColumn: { flex: 1, alignItems: "center", gap: 6 },
+    pickerLabel: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "700",
+      letterSpacing: 0.5,
+    },
+    pickerWheel: {
+      width: "100%",
+      height: 48 * 3,
+      borderRadius: 16,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    pickerWheelDisabled: { opacity: 0.4 },
+    pickerHighlight: {
+      position: "absolute",
+      top: 48,
+      left: 0,
+      right: 0,
+      height: 48,
+      borderTopWidth: 1.5,
+      borderBottomWidth: 1.5,
+      borderColor: colors.primary,
+      zIndex: 10,
+      borderRadius: 4,
+    },
+    pickerScroll: { flex: 1 },
+    pickerContentPad: {},
+    pickerItem: { height: 48, alignItems: "center", justifyContent: "center" },
+    pickerItemText: { fontSize: 22, color: colors.muted, fontWeight: "600" },
+    pickerItemSelected: {
+      color: colors.primary,
+      fontSize: 26,
+      fontWeight: "900",
+    },
+    pickerItemDisabled: { color: colors.border },
+    pickerColon: {
+      color: colors.text,
+      fontSize: 28,
+      fontWeight: "900",
+      marginBottom: 48 * 1.5 - 14,
+      paddingBottom: 4,
+    },
     warning: { color: colors.warning },
     reminderContent: { gap: 13, paddingHorizontal: 4, paddingVertical: 14 },
     reminderToggle: {
